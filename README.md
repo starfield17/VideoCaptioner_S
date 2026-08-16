@@ -109,6 +109,8 @@ dotnet run --project src/Captioner.Desktop
 
 Choose media and an output directory, configure local or remote ASR and the LLM, then start the queue. Each job displays probe, chunk, transcribe, segment, correct, translate, and export state. Stop cancels current work without deleting committed artifacts; a saved batch ID can be resumed.
 
+If the desktop process starts but no window appears, inspect `%LOCALAPPDATA%\Captioner\logs\desktop-startup.log` on Windows. Startup failures also show a native error dialog. The log records lifecycle stages and exception details while redacting API-key-shaped values.
+
 ## Packages and releases
 
 CI builds six self-contained targets: Windows x64/ARM64, macOS x64/ARM64, and Linux x64/ARM64. Windows additionally receives MSI files, macOS receives DMG files, and every platform receives a ZIP. MSI and DMG artifacts are intentionally unsigned until signing credentials are supplied.

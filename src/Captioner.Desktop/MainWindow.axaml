@@ -104,7 +104,7 @@
             </StackPanel>
             <StackPanel Grid.Column="1" Spacing="7">
               <TextBlock Classes="label" Text="TRANSLATE TO" />
-              <TextBox x:Name="TargetLanguageBox" Classes="field" PlaceholderText="zh-CN" TextChanged="TargetLanguage_Changed" />
+              <TextBox x:Name="TargetLanguageBox" Classes="field" PlaceholderText="zh-CN" />
             </StackPanel>
           </Grid>
 
@@ -147,7 +147,7 @@
           <Expander Header="Inference and storage" Foreground="#AFC1E6" IsExpanded="True">
             <StackPanel Spacing="9" Margin="0,12,0,0">
               <TextBlock Classes="label" Text="ASR BACKEND" />
-              <ComboBox x:Name="AsrBackendBox" Classes="field" SelectedIndex="0" SelectionChanged="AsrBackend_Changed">
+              <ComboBox x:Name="AsrBackendBox" Classes="field" SelectedIndex="0">
                 <ComboBoxItem Content="Local · sherpa-onnx" />
                 <ComboBoxItem Content="OpenAI-compatible API" />
               </ComboBox>
@@ -156,7 +156,7 @@
               <TextBlock Classes="label" Text="ASR API KEY · STORED AS PLAINTEXT" />
               <TextBox x:Name="AsrApiKeyBox" Classes="field" PasswordChar="●" PlaceholderText="Optional for remote ASR" />
               <TextBlock Classes="label" Text="SPEECH MODEL" />
-              <ComboBox x:Name="AsrModelBox" Classes="field" IsEditable="True" SelectionChanged="AsrModel_Changed" />
+              <ComboBox x:Name="AsrModelBox" Classes="field" IsEditable="True" />
               <Border Background="#20395A" BorderBrush="#315579" BorderThickness="1" CornerRadius="7" Padding="11,9">
                 <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto">
                   <StackPanel Grid.Row="0" Grid.Column="0">

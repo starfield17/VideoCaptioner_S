@@ -6,6 +6,7 @@
 - `src/Captioner.Cli`: command surface and dependency composition only.
 - `src/Captioner.Desktop`: Avalonia presentation and dependency composition only.
 - `tests/Captioner.Tests`: unit, contract, architecture, and acceptance tests.
+- `tests/Captioner.Desktop.Tests`: headless Avalonia startup and presentation regression tests.
 - `tools/Captioner.Packaging`: verified FFmpeg acquisition and cross-platform release staging.
 - `packaging`: pinned third-party manifests and installer definitions.
 - `reffer/VideoCaptioner/`: read-only behavioral reference; never reference it from the C# build or copy its implementation/assets/prompts.

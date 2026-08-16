@@ -63,6 +63,7 @@ jobs:
           $root = "artifacts/stage/${{ matrix.rid }}/captioner"
           & "$root/captioner.exe" models list --json | Out-Null
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./packaging/windows/Test-DesktopStartup.ps1 -Executable "$root/captioner-desktop.exe"
           & "$root/tools/ffmpeg.exe" -version | Out-Null
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           if (-not (Get-ChildItem $root -Recurse -File | Where-Object Name -Match 'sherpa')) { throw 'sherpa-onnx native/runtime files are missing.' }

@@ -14,6 +14,7 @@ public sealed partial class MainWindow : Window
     private CancellationTokenSource? _runCancellation;
     private CancellationTokenSource? _modelCancellation;
     private bool _targetWasEmpty = true;
+    private bool _isApplyingSettings;
 
     public MainWindow()
     {
@@ -23,6 +24,9 @@ public sealed partial class MainWindow : Window
         ConfigPathBox.Text = new JsonConfigurationLoader().ConfigPath;
         WorkspacePathBox.Text = new FileJobWorkspace().RootDirectory;
         AsrModelBox.ItemsSource = AsrModelCatalog.All.Select(model => model.Id).ToArray();
+        TargetLanguageBox.TextChanged += TargetLanguage_Changed;
+        AsrBackendBox.SelectionChanged += AsrBackend_Changed;
+        AsrModelBox.SelectionChanged += AsrModel_Changed;
         Opened += OnOpened;
     }
 
@@ -37,6 +41,7 @@ public sealed partial class MainWindow : Window
 
     private async void OnOpened(object? sender, EventArgs e)
     {
+        DesktopStartupDiagnostics.Record("window-opened");
         try
         {
             LoadSettings();
@@ -99,6 +104,11 @@ public sealed partial class MainWindow : Window
 
     private void TargetLanguage_Changed(object? sender, TextChangedEventArgs e)
     {
+        if (_isApplyingSettings)
+        {
+            return;
+        }
+
         var isEmpty = string.IsNullOrWhiteSpace(TargetLanguageBox.Text);
         if (_targetWasEmpty && !isEmpty)
         {
@@ -114,6 +124,11 @@ public sealed partial class MainWindow : Window
 
     private void AsrBackend_Changed(object? sender, SelectionChangedEventArgs e)
     {
+        if (_isApplyingSettings)
+        {
+            return;
+        }
+
         var local = AsrBackendBox.SelectedIndex == 0;
         if (local)
         {
@@ -131,7 +146,13 @@ public sealed partial class MainWindow : Window
         RefreshModelStatus();
     }
 
-    private void AsrModel_Changed(object? sender, SelectionChangedEventArgs e) => RefreshModelStatus();
+    private void AsrModel_Changed(object? sender, SelectionChangedEventArgs e)
+    {
+        if (!_isApplyingSettings)
+        {
+            RefreshModelStatus();
+        }
+    }
 
     private void InitializeConfig_Click(object? sender, RoutedEventArgs e)
     {
@@ -332,16 +353,25 @@ public sealed partial class MainWindow : Window
 
     private void LoadSettings()
     {
-        var configuration = new JsonConfigurationLoader(NullIfWhiteSpace(ConfigPathBox.Text)).Load();
-        AsrBackendBox.SelectedIndex = configuration.Asr.Backend == EndpointBackend.SherpaOnnx ? 0 : 1;
-        AsrBaseUrlBox.Text = configuration.Asr.BaseUrl;
-        AsrApiKeyBox.Text = configuration.Asr.ApiKey;
-        AsrModelBox.SelectedItem = configuration.Asr.Model;
-        AsrModelBox.Text = configuration.Asr.Model;
-        LlmBaseUrlBox.Text = configuration.Llm.BaseUrl;
-        LlmModelBox.Text = configuration.Llm.Model;
-        LlmApiKeyBox.Text = configuration.Llm.ApiKey;
-        ModelDirectoryBox.Text = configuration.ModelDirectory;
+        _isApplyingSettings = true;
+        try
+        {
+            var configuration = new JsonConfigurationLoader(NullIfWhiteSpace(ConfigPathBox.Text)).Load();
+            AsrBackendBox.SelectedIndex = configuration.Asr.Backend == EndpointBackend.SherpaOnnx ? 0 : 1;
+            AsrBaseUrlBox.Text = configuration.Asr.BaseUrl;
+            AsrApiKeyBox.Text = configuration.Asr.ApiKey;
+            AsrModelBox.SelectedItem = configuration.Asr.Model;
+            AsrModelBox.Text = configuration.Asr.Model;
+            LlmBaseUrlBox.Text = configuration.Llm.BaseUrl;
+            LlmModelBox.Text = configuration.Llm.Model;
+            LlmApiKeyBox.Text = configuration.Llm.ApiKey;
+            ModelDirectoryBox.Text = configuration.ModelDirectory;
+            _targetWasEmpty = string.IsNullOrWhiteSpace(TargetLanguageBox.Text);
+        }
+        finally
+        {
+            _isApplyingSettings = false;
+        }
     }
 
     private void SaveSettingsCore()

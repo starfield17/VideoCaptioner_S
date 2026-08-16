@@ -93,6 +93,7 @@ jobs:
           if (-not $app) { throw 'Installed CLI was not found.' }
           & $app.FullName models list --json | Out-Null
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./packaging/windows/Test-DesktopStartup.ps1 -Executable (Join-Path $app.DirectoryName 'captioner-desktop.exe')
           $uninstall = Start-Process msiexec.exe -ArgumentList "/x `"$msi`" /qn /norestart" -Wait -PassThru
           if ($uninstall.ExitCode) { throw "MSI uninstall failed: $($uninstall.ExitCode)" }
       - name: Build unsigned DMG

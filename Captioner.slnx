@@ -7,6 +7,7 @@
     <Project Path="src/Captioner.Desktop/Captioner.Desktop.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Captioner.Desktop.Tests/Captioner.Desktop.Tests.csproj" />
     <Project Path="tests/Captioner.Tests/Captioner.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
