@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-15]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - run: dotnet restore Captioner.slnx
+      - run: dotnet build Captioner.slnx --no-restore --configuration Release
+      - run: dotnet test Captioner.slnx --no-build --configuration Release -m:1
+      - if: runner.os == 'Linux'
+        run: dotnet format Captioner.slnx --verify-no-changes --no-restore
+      - run: dotnet run --project src/Captioner.Cli --no-build --configuration Release -- --help
+
+  packaging-smoke:
+    name: Package (${{ matrix.target }})
+    needs: test
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-2022, target: windows-x86_64, rid: win-x64 }
+          - { os: windows-11-arm, target: windows-arm64, rid: win-arm64 }
+          - { os: ubuntu-22.04, target: linux-x86_64, rid: linux-x64 }
+          - { os: ubuntu-24.04-arm, target: linux-arm64, rid: linux-arm64 }
+          - { os: macos-15-intel, target: macos-x86_64, rid: osx-x64 }
+          - { os: macos-15, target: macos-arm64, rid: osx-arm64 }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - run: dotnet run --project tools/Captioner.Packaging -- prepare-ffmpeg ${{ matrix.target }}
+      - run: dotnet run --project tools/Captioner.Packaging -- package ${{ matrix.rid }} 0.0.0
+      - name: Validate packaged application (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $root = "artifacts/stage/${{ matrix.rid }}/captioner"
+          & "$root/captioner.exe" models list --json | Out-Null
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & "$root/tools/ffmpeg.exe" -version | Out-Null
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if (-not (Get-ChildItem $root -Recurse -File | Where-Object Name -Match 'sherpa')) { throw 'sherpa-onnx native/runtime files are missing.' }
+      - name: Validate packaged application (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="artifacts/stage/${{ matrix.rid }}/captioner"
+          "$root/captioner" models list --json >/dev/null
+          "$root/tools/ffmpeg" -version >/dev/null
+          find "$root" -type f -iname '*sherpa*' | grep -q .
+      - name: Validate packaged application (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="artifacts/stage/${{ matrix.rid }}/Captioner.app/Contents/MacOS"
+          "$root/captioner" models list --json >/dev/null
+          "$root/tools/ffmpeg" -version >/dev/null
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "artifacts/stage/${{ matrix.rid }}/Captioner.app/Contents/Info.plist" | grep -qx captioner-desktop
+          find "$root" -type f -iname '*sherpa*' | grep -q .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packages-${{ matrix.target }}
+          path: artifacts/release/*
+          if-no-files-found: error

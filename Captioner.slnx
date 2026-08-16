@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Captioner.Core/Captioner.Core.csproj" />
+    <Project Path="src/Captioner.Engine/Captioner.Engine.csproj" />
+    <Project Path="src/Captioner.Infrastructure/Captioner.Infrastructure.csproj" />
+    <Project Path="src/Captioner.Cli/Captioner.Cli.csproj" />
+    <Project Path="src/Captioner.Desktop/Captioner.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Captioner.Tests/Captioner.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Captioner.Packaging/Captioner.Packaging.csproj" />
+  </Folder>
+</Solution>

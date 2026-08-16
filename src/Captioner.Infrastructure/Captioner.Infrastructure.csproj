@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Captioner.Core/Captioner.Core.csproj" />
+    <ProjectReference Include="../Captioner.Engine/Captioner.Engine.csproj" />
+    <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.13.4" />
+    <PackageReference Include="SharpCompress" Version="0.50.1" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,159 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Numeric package version for a dry run
+        required: true
+        default: "0.0.0"
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-ref:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - id: version
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          MANUAL_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == push ]]; then
+            [[ "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Tag must match vMAJOR.MINOR.PATCH.' >&2; exit 1; }
+            version="${REF_NAME#v}"
+            publish=true
+          else
+            [[ "$MANUAL_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Version must match MAJOR.MINOR.PATCH.' >&2; exit 1; }
+            version="$MANUAL_VERSION"
+            publish=false
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build (${{ matrix.target }})
+    needs: validate-ref
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
+    env:
+      RELEASE_VERSION: ${{ needs.validate-ref.outputs.version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-2022, target: windows-x86_64, rid: win-x64, installer: msi, wixarch: x64 }
+          - { os: windows-11-arm, target: windows-arm64, rid: win-arm64, installer: msi, wixarch: arm64 }
+          - { os: ubuntu-22.04, target: linux-x86_64, rid: linux-x64, installer: none }
+          - { os: ubuntu-24.04-arm, target: linux-arm64, rid: linux-arm64, installer: none }
+          - { os: macos-15-intel, target: macos-x86_64, rid: osx-x64, installer: dmg }
+          - { os: macos-15, target: macos-arm64, rid: osx-arm64, installer: dmg }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - run: dotnet test Captioner.slnx --configuration Release -m:1
+      - run: dotnet run --project tools/Captioner.Packaging -- prepare-ffmpeg ${{ matrix.target }}
+      - run: dotnet run --project tools/Captioner.Packaging -- package ${{ matrix.rid }} ${{ needs.validate-ref.outputs.version }}
+      - name: Build unsigned MSI
+        if: matrix.installer == 'msi'
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 6.0.2
+          wix build packaging/windows/Product.wxs `
+            -arch ${{ matrix.wixarch }} `
+            -d "Version=$env:RELEASE_VERSION" `
+            -d "SourceDir=$((Resolve-Path 'artifacts/stage/${{ matrix.rid }}/captioner').Path)" `
+            -intermediateFolder "artifacts/wix/${{ matrix.rid }}" `
+            -pdbtype none `
+            -o "artifacts/release/captioner-v$env:RELEASE_VERSION-${{ matrix.target }}.msi"
+      - name: Validate MSI install and uninstall
+        if: matrix.installer == 'msi'
+        shell: pwsh
+        run: |
+          $msi = (Resolve-Path "artifacts/release/captioner-v$env:RELEASE_VERSION-${{ matrix.target }}.msi").Path
+          $install = Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /qn /norestart" -Wait -PassThru
+          if ($install.ExitCode) { throw "MSI install failed: $($install.ExitCode)" }
+          $app = Get-ChildItem $env:LOCALAPPDATA -Filter captioner.exe -File -Recurse | Select-Object -First 1
+          if (-not $app) { throw 'Installed CLI was not found.' }
+          & $app.FullName models list --json | Out-Null
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $uninstall = Start-Process msiexec.exe -ArgumentList "/x `"$msi`" /qn /norestart" -Wait -PassThru
+          if ($uninstall.ExitCode) { throw "MSI uninstall failed: $($uninstall.ExitCode)" }
+      - name: Build unsigned DMG
+        if: matrix.installer == 'dmg'
+        shell: bash
+        run: |
+          hdiutil create -volname Captioner -srcfolder "artifacts/stage/${{ matrix.rid }}/Captioner.app" -ov -format UDZO "artifacts/release/captioner-v${RELEASE_VERSION}-${{ matrix.target }}.dmg"
+      - name: Validate DMG
+        if: matrix.installer == 'dmg'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mount_point="$(mktemp -d)"
+          trap 'hdiutil detach "$mount_point" >/dev/null 2>&1 || true; rmdir "$mount_point" 2>/dev/null || true' EXIT
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount_point" "artifacts/release/captioner-v${RELEASE_VERSION}-${{ matrix.target }}.dmg" >/dev/null
+          "$mount_point/Captioner.app/Contents/MacOS/captioner" models list --json >/dev/null
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$mount_point/Captioner.app/Contents/Info.plist")" = "$RELEASE_VERSION"
+      - name: Unsigned package notice
+        run: echo "MSI and DMG artifacts are intentionally unsigned; add platform signing before this upload step when credentials become available."
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packages-${{ matrix.target }}
+          path: artifacts/release/*
+          if-no-files-found: error
+
+  publish:
+    needs: [validate-ref, build]
+    runs-on: ubuntu-24.04
+    env:
+      RELEASE_VERSION: ${{ needs.validate-ref.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: packages-*
+          path: artifacts/release
+          merge-multiple: true
+      - name: Validate expected packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=(
+            "captioner-v$RELEASE_VERSION-windows-x86_64.zip"
+            "captioner-v$RELEASE_VERSION-windows-x86_64.msi"
+            "captioner-v$RELEASE_VERSION-windows-arm64.zip"
+            "captioner-v$RELEASE_VERSION-windows-arm64.msi"
+            "captioner-v$RELEASE_VERSION-linux-x86_64.zip"
+            "captioner-v$RELEASE_VERSION-linux-arm64.zip"
+            "captioner-v$RELEASE_VERSION-macos-x86_64.zip"
+            "captioner-v$RELEASE_VERSION-macos-x86_64.dmg"
+            "captioner-v$RELEASE_VERSION-macos-arm64.zip"
+            "captioner-v$RELEASE_VERSION-macos-arm64.dmg"
+          )
+          test "$(find artifacts/release -maxdepth 1 -type f | wc -l)" -eq "${#expected[@]}"
+          for file in "${expected[@]}"; do test -f "artifacts/release/$file"; done
+      - run: dotnet run --project tools/Captioner.Packaging -- checksums artifacts/release
+      - name: Publish GitHub release
+        if: ${{ needs.validate-ref.outputs.publish == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "v$RELEASE_VERSION" artifacts/release/* --verify-tag --generate-notes --title "Captioner v$RELEASE_VERSION"

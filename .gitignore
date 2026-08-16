@@ -1,0 +1,11 @@
+bin/
+obj/
+.vs/
+.idea/
+TestResults/
+*.user
+*.suo
+artifacts/
+Captioner/jobs/
+reffer/
+workspace/
