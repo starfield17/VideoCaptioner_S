@@ -17,7 +17,7 @@ try {
         }
 
         if ($process.MainWindowHandle -ne 0) {
-            if ($process.MainWindowTitle -ne "Caption Room") {
+            if ($process.MainWindowTitle -ne "Captioner") {
                 throw "Desktop process opened an unexpected window: '$($process.MainWindowTitle)'."
             }
 
