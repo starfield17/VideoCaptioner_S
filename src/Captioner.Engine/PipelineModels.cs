@@ -6,7 +6,8 @@ public sealed record MediaInput(
     string Path,
     string RelativePath,
     string Sha256,
-    string OutputPath);
+    string OutputPath,
+    SourceKind Kind = SourceKind.Media);
 
 public sealed record MediaInfoArtifact(long DurationMs, long SizeBytes, bool HasAudio);
 

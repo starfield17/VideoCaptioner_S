@@ -21,7 +21,7 @@ Architecture tests prevent Core or Engine from depending on Infrastructure or ei
 probe → chunks → transcribe → segment → correct → translate → export
 ```
 
-Each stage stores a JSON artifact, SHA-256 checksum, semantic version, upstream artifact hash, and every setting that affects output. Reuse requires both checksum and fingerprint to match. Export additionally parses and validates the final SRT before reuse.
+Each stage stores a JSON artifact, SHA-256 checksum, semantic version, upstream artifact hash, and every setting that affects output. Reuse requires both checksum and fingerprint to match. Export additionally parses and validates the final SRT before reuse. An `.srt` input skips probe/chunk/ASR work and imports cues; LLM correction and translation windows run concurrently through the LLM gate.
 
 Options are persisted with each batch. A process killed during a stage leaves it pending while earlier committed stages remain reusable. Files fail independently. File, ASR, and LLM concurrency have separate gates. Job directories are batch-owned so a new run or cleanup cannot corrupt another batch.
 
@@ -45,6 +45,8 @@ Transcript and caption text is serialized as untrusted JSON in a separate user m
 ## Configuration and secrets
 
 Configuration may contain a plaintext API key or the name of an environment variable. A direct key takes precedence. Plaintext storage is an explicit local-product tradeoff and the config receives owner-only Unix permissions when supported.
+
+The same configuration also owns the model directory, recovery workspace, and default glossary. An explicit CLI `--workspace` still takes precedence over the configured workspace. Desktop Settings writes configuration atomically; active batches keep their in-memory endpoint snapshot until they finish or stop.
 
 Keys are resolved only for HTTP calls. They are excluded from serialized endpoint profiles and therefore never enter batch manifests, stage artifacts, logs, diagnostics, or SRT output. `config show` returns a redacted projection. No request headers or request bodies are logged.
 

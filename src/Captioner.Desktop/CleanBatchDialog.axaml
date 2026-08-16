@@ -1,0 +1,22 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Captioner.Desktop.CleanBatchDialog"
+        Title="Clean batch"
+        Width="480"
+        Height="250"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+  <Grid RowDefinitions="*,Auto" Margin="26,24,26,20">
+    <StackPanel Spacing="12">
+      <TextBlock Classes="page-title" FontSize="22" Text="Clean recovery data?" />
+      <TextBlock Text="This removes the saved batch manifest and job artifacts. Published SRT files are kept." TextWrapping="Wrap" />
+      <Border Classes="subtle-card" Padding="12,9">
+        <TextBlock x:Name="BatchIdText" Classes="mono caption" TextWrapping="Wrap" />
+      </Border>
+    </StackPanel>
+    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="9">
+      <Button Classes="secondary" Content="Cancel" Click="Cancel_Click" />
+      <Button Classes="danger" Content="Clean recovery data" Click="Clean_Click" />
+    </StackPanel>
+  </Grid>
+</Window>

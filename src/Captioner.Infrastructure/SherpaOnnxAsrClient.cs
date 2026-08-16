@@ -42,7 +42,7 @@ public sealed class SherpaOnnxAsrClient : IAsrClient, IDisposable
         await runtime.Gate.WaitAsync(cancellationToken);
         try
         {
-            return await Task.Run(() => Decode(chunk, model, runtime, language, cancellationToken), CancellationToken.None);
+            return await Task.Run(() => Decode(chunk, model, runtime, language, cancellationToken), cancellationToken);
         }
         finally
         {

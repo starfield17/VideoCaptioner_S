@@ -3,249 +3,74 @@
         xmlns:local="using:Captioner.Desktop"
         x:Class="Captioner.Desktop.MainWindow"
         x:DataType="local:MainWindow"
-        Title="Caption Room"
-        Width="1240"
+        Title="Captioner"
+        Width="1280"
         Height="820"
         MinWidth="980"
-        MinHeight="680"
-        Background="#EEF3FA"
-        FontFamily="Inter">
-  <Window.Styles>
-    <Style Selector="TextBlock.display">
-      <Setter Property="FontSize" Value="34" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="LetterSpacing" Value="-1.2" />
-    </Style>
-    <Style Selector="TextBlock.eyebrow">
-      <Setter Property="FontSize" Value="11" />
-      <Setter Property="FontWeight" Value="Bold" />
-      <Setter Property="LetterSpacing" Value="1.8" />
-    </Style>
-    <Style Selector="TextBlock.label">
-      <Setter Property="FontSize" Value="12" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="#AFC1E6" />
-    </Style>
-    <Style Selector="TextBox.field">
-      <Setter Property="Background" Value="#223253" />
-      <Setter Property="Foreground" Value="#F7FAFF" />
-      <Setter Property="BorderBrush" Value="#3A4B70" />
-      <Setter Property="CornerRadius" Value="6" />
-      <Setter Property="Padding" Value="10,8" />
-    </Style>
-    <Style Selector="ComboBox.field">
-      <Setter Property="Background" Value="#223253" />
-      <Setter Property="Foreground" Value="#F7FAFF" />
-      <Setter Property="BorderBrush" Value="#3A4B70" />
-      <Setter Property="CornerRadius" Value="6" />
-    </Style>
-    <Style Selector="NumericUpDown.field">
-      <Setter Property="Background" Value="#223253" />
-      <Setter Property="Foreground" Value="#F7FAFF" />
-      <Setter Property="BorderBrush" Value="#3A4B70" />
-      <Setter Property="CornerRadius" Value="6" />
-    </Style>
-    <Style Selector="Button.primary">
-      <Setter Property="Background" Value="#72D0E0" />
-      <Setter Property="Foreground" Value="#13213C" />
-      <Setter Property="FontWeight" Value="Bold" />
-      <Setter Property="Padding" Value="18,11" />
-      <Setter Property="CornerRadius" Value="7" />
-    </Style>
-    <Style Selector="Button.secondary">
-      <Setter Property="Background" Value="#2A3B60" />
-      <Setter Property="Foreground" Value="#ECF3FF" />
-      <Setter Property="BorderBrush" Value="#42557D" />
-      <Setter Property="Padding" Value="13,8" />
-      <Setter Property="CornerRadius" Value="7" />
-    </Style>
-    <Style Selector="Button.ghost">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="#31466E" />
-      <Setter Property="BorderBrush" Value="#BCC9DC" />
-      <Setter Property="Padding" Value="13,8" />
-      <Setter Property="CornerRadius" Value="7" />
-    </Style>
-  </Window.Styles>
-
-  <Grid ColumnDefinitions="380,*">
-    <Border Grid.Column="0" Background="#15213B" Padding="28,26">
-      <ScrollViewer>
-        <StackPanel Spacing="18">
-          <StackPanel Spacing="3">
-            <TextBlock Classes="eyebrow" Foreground="#72D0E0" Text="CAPTION / ROOM" />
-            <TextBlock Classes="display" Foreground="#F7FAFF" Text="Caption Room" />
-            <TextBlock Foreground="#91A4CA" Text="Batch SRT with a recoverable timeline" />
+        MinHeight="680">
+  <Grid RowDefinitions="68,*">
+    <Border Grid.Row="0"
+            Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="24,0">
+      <Grid ColumnDefinitions="Auto,32,Auto,*,Auto,Auto" VerticalAlignment="Center">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <Border Width="34" Height="34" CornerRadius="9" Background="{StaticResource PrimaryBrush}">
+            <TextBlock HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Foreground="White"
+                       FontSize="17"
+                       FontWeight="Bold"
+                       Text="C" />
+          </Border>
+          <StackPanel VerticalAlignment="Center" Spacing="0">
+            <TextBlock FontSize="15" FontWeight="SemiBold" Text="Captioner" />
+            <TextBlock Classes="caption" FontSize="11" Text="Batch SRT workbench" />
           </StackPanel>
-
-          <Border Height="1" Background="#35476D" />
-
-          <StackPanel Spacing="7">
-            <TextBlock Classes="label" Text="INPUT MEDIA" />
-            <TextBox x:Name="InputPathBox" Classes="field" PlaceholderText="Files or folders; separate paths with semicolons" TextWrapping="Wrap" MinHeight="54" />
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-              <Button Grid.Column="0" Classes="secondary" Content="Choose files" Click="BrowseFiles_Click" />
-              <Button Grid.Column="1" Classes="secondary" Content="Choose folder" Click="BrowseInputFolder_Click" />
-            </Grid>
-          </StackPanel>
-
-          <StackPanel Spacing="7">
-            <TextBlock Classes="label" Text="SRT OUTPUT FOLDER" />
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-              <TextBox x:Name="OutputPathBox" Grid.Column="0" Classes="field" PlaceholderText="Output folder" />
-              <Button Grid.Column="1" Classes="secondary" Content="Choose" Click="BrowseOutput_Click" />
-            </Grid>
-          </StackPanel>
-
-          <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-            <StackPanel Grid.Column="0" Spacing="7">
-              <TextBlock Classes="label" Text="SOURCE LANGUAGE" />
-              <TextBox x:Name="SourceLanguageBox" Classes="field" PlaceholderText="auto" />
-            </StackPanel>
-            <StackPanel Grid.Column="1" Spacing="7">
-              <TextBlock Classes="label" Text="TRANSLATE TO" />
-              <TextBox x:Name="TargetLanguageBox" Classes="field" PlaceholderText="zh-CN" />
-            </StackPanel>
-          </Grid>
-
-          <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-            <StackPanel Grid.Column="0" Spacing="7">
-              <TextBlock Classes="label" Text="SUBTITLE LAYOUT" />
-              <ComboBox x:Name="LayoutBox" Classes="field" SelectedIndex="0">
-                <ComboBoxItem Content="Source only" />
-                <ComboBoxItem Content="Translation only" />
-                <ComboBoxItem Content="Bilingual" />
-              </ComboBox>
-            </StackPanel>
-            <StackPanel Grid.Column="1" Spacing="7">
-              <TextBlock Classes="label" Text="PARALLEL FILES" />
-              <NumericUpDown x:Name="JobsBox" Classes="field" Minimum="1" Maximum="16" Value="2" />
-            </StackPanel>
-          </Grid>
-
-          <WrapPanel ItemSpacing="16" LineSpacing="8">
-            <CheckBox x:Name="SegmentBox" Foreground="#DDE7FA" Content="Semantic cues" IsChecked="True" />
-            <CheckBox x:Name="CorrectBox" Foreground="#DDE7FA" Content="Polish captions" IsChecked="True" />
-            <CheckBox x:Name="OverwriteBox" Foreground="#DDE7FA" Content="Replace SRT" />
-          </WrapPanel>
-
-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-            <Button x:Name="RunButton" Grid.Column="0" Classes="primary" Content="Create subtitles" Click="Run_Click" />
-            <Button x:Name="CancelButton" Grid.Column="1" Classes="secondary" Content="Stop" Click="Cancel_Click" IsEnabled="False" />
-          </Grid>
-
-          <Border Height="1" Background="#35476D" />
-
-          <StackPanel Spacing="7">
-            <TextBlock Classes="label" Text="RESUME A BATCH" />
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-              <TextBox x:Name="BatchIdBox" Grid.Column="0" Classes="field" PlaceholderText="Batch ID" />
-              <Button Grid.Column="1" Classes="secondary" Content="Resume" Click="Resume_Click" />
-            </Grid>
-          </StackPanel>
-
-          <Expander Header="Inference and storage" Foreground="#AFC1E6" IsExpanded="True">
-            <StackPanel Spacing="9" Margin="0,12,0,0">
-              <TextBlock Classes="label" Text="ASR BACKEND" />
-              <ComboBox x:Name="AsrBackendBox" Classes="field" SelectedIndex="0">
-                <ComboBoxItem Content="Local · sherpa-onnx" />
-                <ComboBoxItem Content="OpenAI-compatible API" />
-              </ComboBox>
-              <TextBlock Classes="label" Text="ASR BASE URL" />
-              <TextBox x:Name="AsrBaseUrlBox" Classes="field" PlaceholderText="local://sherpa-onnx" />
-              <TextBlock Classes="label" Text="ASR API KEY · STORED AS PLAINTEXT" />
-              <TextBox x:Name="AsrApiKeyBox" Classes="field" PasswordChar="●" PlaceholderText="Optional for remote ASR" />
-              <TextBlock Classes="label" Text="SPEECH MODEL" />
-              <ComboBox x:Name="AsrModelBox" Classes="field" IsEditable="True" />
-              <Border Background="#20395A" BorderBrush="#315579" BorderThickness="1" CornerRadius="7" Padding="11,9">
-                <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto">
-                  <StackPanel Grid.Row="0" Grid.Column="0">
-                    <TextBlock x:Name="ModelStatusText" Foreground="#DDE7FA" FontWeight="SemiBold" Text="Select a local model" />
-                    <TextBlock x:Name="ModelDetailText" Foreground="#91A4CA" FontSize="11" Text="Models are downloaded only when requested." />
-                  </StackPanel>
-                  <Button x:Name="DownloadModelButton" Grid.Row="0" Grid.Column="1" Classes="secondary" Content="Download" Click="DownloadModel_Click" />
-                  <ProgressBar x:Name="ModelProgressBar" Grid.Row="1" Grid.ColumnSpan="2" Margin="0,9,0,0" Height="5" Minimum="0" Maximum="100" Value="0" IsVisible="False" />
-                </Grid>
-              </Border>
-
-              <TextBlock Classes="label" Text="LLM BASE URL" />
-              <TextBox x:Name="LlmBaseUrlBox" Classes="field" PlaceholderText="https://api.deepseek.com" />
-              <TextBlock Classes="label" Text="LLM MODEL" />
-              <TextBox x:Name="LlmModelBox" Classes="field" PlaceholderText="deepseek-v4-flash" />
-              <TextBlock Classes="label" Text="LLM API KEY · STORED AS PLAINTEXT" />
-              <TextBox x:Name="LlmApiKeyBox" Classes="field" PasswordChar="●" PlaceholderText="Enter an API key" />
-
-              <TextBlock Classes="label" Text="MODEL DIRECTORY" />
-              <TextBox x:Name="ModelDirectoryBox" Classes="field" />
-              <TextBlock Classes="label" Text="CONFIGURATION FILE" />
-              <TextBox x:Name="ConfigPathBox" Classes="field" />
-              <TextBlock Classes="label" Text="RECOVERY WORKSPACE" />
-              <TextBox x:Name="WorkspacePathBox" Classes="field" />
-              <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                <Button Grid.Column="0" Classes="secondary" Content="Create config" Click="InitializeConfig_Click" />
-                <Button Grid.Column="1" Classes="primary" Content="Save settings" Click="SaveSettings_Click" />
-              </Grid>
-            </StackPanel>
-          </Expander>
         </StackPanel>
-      </ScrollViewer>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
+          <Button x:Name="NewBatchNavButton"
+                  Classes="nav active"
+                  Content="New batch"
+                  Click="NewBatchNav_Click" />
+          <Button x:Name="QueueNavButton"
+                  Classes="nav"
+                  Content="Queue"
+                  Click="QueueNav_Click" />
+        </StackPanel>
+
+        <Border x:Name="RunStateBadge"
+                Grid.Column="4"
+                Background="#EAF7F4"
+                CornerRadius="14"
+                Padding="11,6"
+                Margin="0,0,10,0"
+                IsVisible="False">
+          <StackPanel Orientation="Horizontal" Spacing="7">
+            <Ellipse Width="7" Height="7" Fill="{StaticResource SuccessBrush}" />
+            <TextBlock x:Name="RunStateText" FontSize="12" FontWeight="SemiBold" Foreground="#17705D" Text="Batch running" />
+          </StackPanel>
+        </Border>
+
+        <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="5">
+          <Button x:Name="StopButton"
+                  Classes="ghost"
+                  Content="Stop"
+                  Click="Stop_Click"
+                  IsVisible="False" />
+          <Button x:Name="SettingsButton"
+                  Classes="secondary"
+                  Content="Settings"
+                  Click="Settings_Click" />
+        </StackPanel>
+      </Grid>
     </Border>
 
-    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*" Margin="34,28,34,30">
-      <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,20">
-        <StackPanel>
-          <TextBlock Classes="eyebrow" Foreground="#48638F" Text="BATCH TIMELINE" />
-          <TextBlock FontSize="27" FontWeight="SemiBold" Foreground="#13213C" Text="Task tracks" />
-        </StackPanel>
-        <Border Grid.Column="1" Background="#DCE6F4" CornerRadius="18" Padding="14,7" VerticalAlignment="Center">
-          <TextBlock x:Name="BatchCountText" Foreground="#31466E" FontWeight="SemiBold" Text="0 tasks" />
-        </Border>
-      </Grid>
-
-      <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#D7E0ED" BorderThickness="1" CornerRadius="10" Padding="16,13" Margin="0,0,0,14">
-        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="13">
-          <Border Width="8" Height="38" CornerRadius="4" Background="#72D0E0" />
-          <StackPanel Grid.Column="1">
-            <TextBlock x:Name="StatusText" FontWeight="SemiBold" Foreground="#1E3154" Text="Choose media to begin. Each block is one durable pipeline stage." />
-            <TextBlock Foreground="#687B9C" FontSize="12" Text="Probe  ›  Audio  ›  Transcribe  ›  Segment  ›  Polish  ›  Translate  ›  Export" />
-          </StackPanel>
-        </Grid>
-      </Border>
-
-      <ScrollViewer Grid.Row="2">
-        <ItemsControl ItemsSource="{Binding Jobs}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="local:JobRow">
-              <Border Background="#FFFFFF" BorderBrush="#D7E0ED" BorderThickness="1" CornerRadius="10" Padding="18" Margin="0,0,0,11">
-                <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto">
-                  <StackPanel Grid.Row="0" Grid.Column="0" Spacing="3">
-                    <TextBlock Foreground="#13213C" FontWeight="SemiBold" FontSize="15" Text="{Binding FileName}" />
-                    <TextBlock Foreground="#7183A1" FontSize="11" Text="{Binding InputPath}" TextTrimming="CharacterEllipsis" />
-                  </StackPanel>
-                  <Border Grid.Row="0" Grid.Column="1" Background="{Binding StatusBackground}" CornerRadius="12" Padding="10,5" VerticalAlignment="Top">
-                    <TextBlock Foreground="{Binding StatusForeground}" FontSize="11" FontWeight="SemiBold" Text="{Binding Status}" />
-                  </Border>
-                  <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnDefinitions="*,Auto" Margin="0,15,0,0">
-                    <ItemsControl ItemsSource="{Binding Stages}">
-                      <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                          <StackPanel Orientation="Horizontal" Spacing="5" />
-                        </ItemsPanelTemplate>
-                      </ItemsControl.ItemsPanel>
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="local:StageMarker">
-                          <Border Width="43" Height="7" CornerRadius="4" Background="{Binding Fill}" ToolTip.Tip="{Binding Label}" />
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <TextBlock Grid.Column="1" Foreground="#687B9C" FontSize="11" Text="{Binding OutputPath}" TextTrimming="CharacterEllipsis" MaxWidth="300" />
-                  </Grid>
-                </Grid>
-              </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </ScrollViewer>
+    <Grid Grid.Row="1">
+      <local:NewBatchView x:Name="NewBatchPage" />
+      <local:QueueView x:Name="QueuePage" IsVisible="False" />
     </Grid>
   </Grid>
 </Window>

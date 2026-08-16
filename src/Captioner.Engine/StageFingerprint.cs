@@ -18,4 +18,9 @@ public static class StageFingerprint
 
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(payload)));
     }
+
+    public static string ReferenceHash(string? referenceText) =>
+        string.IsNullOrWhiteSpace(referenceText)
+            ? string.Empty
+            : Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(referenceText.Trim())));
 }

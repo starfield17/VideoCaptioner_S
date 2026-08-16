@@ -58,7 +58,7 @@ printf '%s\n' "$DEEPSEEK_API_KEY" | captioner config set-llm \
   --api-key-stdin
 ```
 
-The desktop Settings panel can save the same values. API keys are stored as plaintext JSON because this application is designed for local single-user configuration. The config file is created with owner-only permissions on Unix when supported. Treat it like a password: do not commit, share, or attach it to bug reports. `config show`, logs, job manifests, stage artifacts, and SRT files never expose the key.
+The desktop Settings dialog saves the same values, the default glossary, model location, and recovery workspace. API keys are stored as plaintext JSON because this application is designed for local single-user configuration. The config file is created with owner-only permissions on Unix when supported. Treat it like a password: do not commit, share, or attach it to bug reports. `config show`, logs, job manifests, stage artifacts, and SRT files never expose the key.
 
 For automation, a configured `apiKeyEnvironmentVariable` remains a supported fallback. A directly configured `apiKey` takes precedence. Named profiles under `profiles` may be selected with `--asr-profile` or `--llm-profile`.
 
@@ -81,7 +81,7 @@ captioner run ./course --output ./subtitles --target-language en --layout target
 
 Without a target language, output defaults to source-only. With a target language, it defaults to bilingual. Output directories mirror input subdirectories; names look like `lesson.captioned.srt` and `lesson.captioned.zh-CN.bilingual.srt`.
 
-`run` persists a batch ID before inference begins. Resume keeps the original content settings:
+`run` accepts media or `.srt` files. An SRT input skips FFmpeg and ASR and reprocesses cues. Resume keeps the original content settings:
 
 ```bash
 captioner status
@@ -92,9 +92,12 @@ captioner clean 20260816143000-1a2b3c4d
 
 Useful switches:
 
-- `--no-segment`: deterministic length/duration splitting without the LLM.
+- `--no-segment`: deterministic length/duration splitting without the LLM. SRT-only runs default to this unless `--segment` is passed.
 - `--no-correct`: skip LLM correction.
-- `--max-cue-characters` and `--max-cue-duration-ms`: deterministic safety limits.
+- `--max-cue-cjk` and `--max-cue-words`: CJK grapheme and Latin word safety limits. `--max-cue-characters` restores the older unified grapheme cap.
+- `--prompt` / `--prompt-file`: untrusted glossary or manuscript used for correction and translation.
+- `--llm-jobs`: concurrent LLM windows (default 4).
+- `--max-cue-duration-ms`: deterministic duration safety limit.
 - `--json`: machine-readable result output.
 - `--workspace`: override durable batch and artifact storage.
 - `--config`: override the configuration file.
@@ -107,7 +110,12 @@ Exit codes are `0` success, `1` runtime error, `2` invalid usage/input, `3` miss
 dotnet run --project src/Captioner.Desktop
 ```
 
-Choose media and an output directory, configure local or remote ASR and the LLM, then start the queue. Each job displays probe, chunk, transcribe, segment, correct, translate, and export state. Stop cancels current work without deleting committed artifacts; a saved batch ID can be resumed.
+The workbench has two top-level views:
+
+- **New batch** accepts media, SRT files, folders, and mixed batches by picker or drag-and-drop. Caption, processing, and cue-limit options stay with the batch; the global glossary and optional batch manuscript are fingerprinted when work starts.
+- **Queue** keeps a recent-batch switcher, a dense job table, and a selected-job Caption track for probe, audio, transcribe, segment, polish, translate, and export state.
+
+Settings is a modal dialog for local or remote ASR, the OpenAI-compatible LLM, explicit model downloads, connection checks, the default glossary, and storage paths. Starting a batch performs inline file and endpoint preflight, then moves directly to Queue. Stop cancels current work without deleting committed artifacts; Resume uses verified stage artifacts and the current endpoint settings. Cleaning a batch removes recovery data but keeps published SRT files.
 
 If the desktop process starts but no window appears, inspect `%LOCALAPPDATA%\Captioner\logs\desktop-startup.log` on Windows. Startup failures also show a native error dialog. The log records lifecycle stages and exception details while redacting API-key-shaped values.
 

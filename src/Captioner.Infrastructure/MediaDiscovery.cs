@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Captioner.Core;
 using Captioner.Engine;
 
 namespace Captioner.Infrastructure;
@@ -9,7 +10,7 @@ public static class MediaDiscovery
     private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".aac", ".avi", ".flac", ".m2ts", ".m4a", ".m4v", ".mkv", ".mov", ".mp3", ".mp4",
-        ".ogg", ".opus", ".ts", ".wav", ".webm", ".wma"
+        ".ogg", ".opus", ".srt", ".ts", ".wav", ".webm", ".wma"
     };
 
     public static IReadOnlySet<string> SupportedExtensions => Extensions;
@@ -41,7 +42,7 @@ public static class MediaDiscovery
         {
             if (!IsSupported(fullInput))
             {
-                throw new ArgumentException($"Unsupported media extension: {Path.GetExtension(fullInput)}", nameof(inputPath));
+                throw new ArgumentException($"Unsupported media or subtitle extension: {Path.GetExtension(fullInput)}", nameof(inputPath));
             }
 
             files = [(fullInput, Path.GetFileName(fullInput))];
@@ -56,7 +57,7 @@ public static class MediaDiscovery
         }
         else
         {
-            throw new FileNotFoundException("Media input path was not found.", inputPath);
+            throw new FileNotFoundException("Input path was not found.", inputPath);
         }
 
         var results = new List<MediaInput>(files.Count);
@@ -67,13 +68,19 @@ public static class MediaDiscovery
             var relativeOutput = Path.ChangeExtension(normalizedRelative, outputExtension);
             var outputPath = Path.GetFullPath(Path.Combine(fullOutput, relativeOutput));
             var hash = await MediaHasher.ComputeSha256Async(path, cancellationToken);
-            results.Add(new(path, normalizedRelative, hash, outputPath));
+            results.Add(new(path, normalizedRelative, hash, outputPath, KindOf(path)));
         }
 
         return results;
     }
 
     public static bool IsSupported(string path) => Extensions.Contains(Path.GetExtension(path));
+
+    public static bool IsSubtitle(string path) =>
+        string.Equals(Path.GetExtension(path), ".srt", StringComparison.OrdinalIgnoreCase);
+
+    private static SourceKind KindOf(string path) =>
+        IsSubtitle(path) ? SourceKind.Subtitle : SourceKind.Media;
 }
 
 /// <summary>Full-file SHA-256 hashing for input media and deterministic job identity.</summary>

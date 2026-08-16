@@ -12,4 +12,13 @@ public sealed record PipelineOptions(
     int MaxCueCharacters = 42,
     long MaxCueDurationMs = 7_000,
     int MaxFileConcurrency = 2,
-    bool Overwrite = false);
+    bool Overwrite = false,
+    string? ReferenceText = null,
+    int MaxCueCharactersCjk = 0,
+    int MaxCueWordsLatin = 0)
+{
+    public int EffectiveMaxCueCharactersCjk =>
+        MaxCueCharactersCjk > 0 ? MaxCueCharactersCjk : MaxCueCharacters;
+
+    public int EffectiveMaxCueWordsLatin => MaxCueWordsLatin;
+}

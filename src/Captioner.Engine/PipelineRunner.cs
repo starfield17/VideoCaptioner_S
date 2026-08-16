@@ -7,15 +7,18 @@ public sealed class PipelineRunner(
     IAsrClient asrClient,
     ILlmClient llmClient,
     IJobWorkspace workspace,
-    ISubtitlePublisher subtitlePublisher)
+    ISubtitlePublisher subtitlePublisher,
+    ISubtitleImporter subtitleImporter)
 {
     private const int ProbeVersion = 1;
     private const int ChunkVersion = 2;
     private const int TranscribeVersion = 2;
-    private const int SegmentVersion = 1;
-    private const int CorrectVersion = 1;
-    private const int TranslateVersion = 1;
+    private const int ImportVersion = 1;
+    private const int SegmentVersion = 2;
+    private const int CorrectVersion = 2;
+    private const int TranslateVersion = 2;
     private const int ExportVersion = 1;
+    private const int PromptVersion = 3;
 
     public async Task<ExportArtifact> RunAsync(
         JobManifest manifest,
@@ -24,7 +27,148 @@ public sealed class PipelineRunner(
         CancellationToken cancellationToken)
     {
         var state = new JobExecutionState(manifest, workspace);
+        var (transcript, transcriptArtifact) = manifest.SourceKind == SourceKind.Subtitle
+            ? await ImportSubtitleAsync(state, manifest, cancellationToken)
+            : await TranscribeMediaAsync(state, manifest, options, gate, cancellationToken);
 
+        var segmentFingerprint = StageFingerprint.Create(
+            StageNames.Segment,
+            SegmentVersion,
+            transcriptArtifact.Sha256,
+            new
+            {
+                options.EnableSegmentation,
+                options.EffectiveMaxCueCharactersCjk,
+                options.EffectiveMaxCueWordsLatin,
+                options.MaxCueDurationMs,
+                LlmBaseUrl = options.EnableSegmentation ? options.Llm.BaseUrl : null,
+                LlmModel = options.EnableSegmentation ? options.Llm.Model : null,
+                Reference = StageFingerprint.ReferenceHash(options.ReferenceText),
+                PromptVersion
+            });
+        var (segmented, segmentedArtifact) = await state.RunStageAsync(
+            StageNames.Segment,
+            segmentFingerprint,
+            ct => SegmentAsync(transcript, options, gate, manifest.SourceKind, ct),
+            cancellationToken);
+
+        var correctFingerprint = StageFingerprint.Create(
+            StageNames.Correct,
+            CorrectVersion,
+            segmentedArtifact.Sha256,
+            new
+            {
+                options.EnableCorrection,
+                LlmBaseUrl = options.EnableCorrection ? options.Llm.BaseUrl : null,
+                LlmModel = options.EnableCorrection ? options.Llm.Model : null,
+                Reference = StageFingerprint.ReferenceHash(options.ReferenceText),
+                PromptVersion
+            });
+        var (corrected, correctedArtifact) = await state.RunStageAsync(
+            StageNames.Correct,
+            correctFingerprint,
+            ct => CorrectAsync(segmented, options, gate, ct),
+            cancellationToken);
+
+        var translateFingerprint = StageFingerprint.Create(
+            StageNames.Translate,
+            TranslateVersion,
+            correctedArtifact.Sha256,
+            new
+            {
+                options.TargetLanguage,
+                LlmBaseUrl = options.TargetLanguage is not null ? options.Llm.BaseUrl : null,
+                LlmModel = options.TargetLanguage is not null ? options.Llm.Model : null,
+                Reference = StageFingerprint.ReferenceHash(options.ReferenceText),
+                PromptVersion
+            });
+        var (translated, translatedArtifact) = await state.RunStageAsync(
+            StageNames.Translate,
+            translateFingerprint,
+            ct => TranslateAsync(corrected, options, gate, ct),
+            cancellationToken);
+
+        var exportFingerprint = StageFingerprint.Create(
+            StageNames.Export,
+            ExportVersion,
+            translatedArtifact.Sha256,
+            new { options.Layout, manifest.OutputPath });
+        var (exported, _) = await state.RunStageAsync(
+            StageNames.Export,
+            exportFingerprint,
+            ct => subtitlePublisher.PublishAsync(
+                translated,
+                manifest.OutputPath,
+                options.Layout,
+                options.Overwrite,
+                ct),
+            cancellationToken,
+            (artifact, ct) => subtitlePublisher.VerifyAsync(artifact, ct));
+
+        return exported;
+    }
+
+    private async Task<(TranscriptDocument Transcript, ArtifactReference Artifact)> ImportSubtitleAsync(
+        JobExecutionState state,
+        JobManifest manifest,
+        CancellationToken cancellationToken)
+    {
+        var imported = await subtitleImporter.ImportAsync(manifest.InputPath, cancellationToken);
+        if (imported.Cues.Count == 0)
+        {
+            throw new PipelineBlockedException("The subtitle file does not contain any cues.");
+        }
+
+        var probeFingerprint = StageFingerprint.Create(
+            StageNames.Probe,
+            ImportVersion,
+            manifest.InputSha256,
+            new { Kind = SourceKind.Subtitle, manifest.InputPath });
+        var (media, probeArtifact) = await state.RunStageAsync(
+            StageNames.Probe,
+            probeFingerprint,
+            _ => Task.FromResult(new MediaInfoArtifact(imported.MediaDurationMs, 0, true)),
+            cancellationToken);
+
+        var chunksFingerprint = StageFingerprint.Create(
+            StageNames.Chunks,
+            ImportVersion,
+            probeArtifact.Sha256,
+            new { Kind = SourceKind.Subtitle });
+        var (_, chunksArtifact) = await state.RunStageAsync(
+            StageNames.Chunks,
+            chunksFingerprint,
+            _ => Task.FromResult(new MediaChunksArtifact([])),
+            cancellationToken);
+
+        var transcript = ToTranscript(imported);
+        var validation = TimelineValidator.ValidateAnchors(transcript.Anchors, media.DurationMs);
+        if (!validation.IsValid)
+        {
+            throw new PipelineBlockedException(
+                "Imported subtitle timeline is invalid: " +
+                string.Join("; ", validation.Issues.Select(issue => issue.Message)));
+        }
+
+        var transcribeFingerprint = StageFingerprint.Create(
+            StageNames.Transcribe,
+            ImportVersion,
+            chunksArtifact.Sha256,
+            new { Kind = SourceKind.Subtitle, CueCount = transcript.Anchors.Count });
+        return await state.RunStageAsync(
+            StageNames.Transcribe,
+            transcribeFingerprint,
+            _ => Task.FromResult(transcript),
+            cancellationToken);
+    }
+
+    private async Task<(TranscriptDocument Transcript, ArtifactReference Artifact)> TranscribeMediaAsync(
+        JobExecutionState state,
+        JobManifest manifest,
+        PipelineOptions options,
+        InferenceGate gate,
+        CancellationToken cancellationToken)
+    {
         var probeFingerprint = StageFingerprint.Create(
             StageNames.Probe,
             ProbeVersion,
@@ -80,83 +224,11 @@ public sealed class PipelineRunner(
                 options.Asr.Capabilities.SegmentTimestamps,
                 options.Asr.Capabilities.WordTimestamps
             });
-        var (transcript, transcriptArtifact) = await state.RunStageAsync(
+        return await state.RunStageAsync(
             StageNames.Transcribe,
             transcribeFingerprint,
             ct => TranscribeChunksAsync(chunks, media, options, gate, ct),
             cancellationToken);
-
-        var segmentFingerprint = StageFingerprint.Create(
-            StageNames.Segment,
-            SegmentVersion,
-            transcriptArtifact.Sha256,
-            new
-            {
-                options.EnableSegmentation,
-                options.MaxCueCharacters,
-                options.MaxCueDurationMs,
-                LlmBaseUrl = options.EnableSegmentation ? options.Llm.BaseUrl : null,
-                LlmModel = options.EnableSegmentation ? options.Llm.Model : null,
-                PromptVersion = 2
-            });
-        var (segmented, segmentedArtifact) = await state.RunStageAsync(
-            StageNames.Segment,
-            segmentFingerprint,
-            ct => SegmentAsync(transcript, options, gate, ct),
-            cancellationToken);
-
-        var correctFingerprint = StageFingerprint.Create(
-            StageNames.Correct,
-            CorrectVersion,
-            segmentedArtifact.Sha256,
-            new
-            {
-                options.EnableCorrection,
-                LlmBaseUrl = options.EnableCorrection ? options.Llm.BaseUrl : null,
-                LlmModel = options.EnableCorrection ? options.Llm.Model : null,
-                PromptVersion = 2
-            });
-        var (corrected, correctedArtifact) = await state.RunStageAsync(
-            StageNames.Correct,
-            correctFingerprint,
-            ct => CorrectAsync(segmented, options, gate, ct),
-            cancellationToken);
-
-        var translateFingerprint = StageFingerprint.Create(
-            StageNames.Translate,
-            TranslateVersion,
-            correctedArtifact.Sha256,
-            new
-            {
-                options.TargetLanguage,
-                LlmBaseUrl = options.TargetLanguage is not null ? options.Llm.BaseUrl : null,
-                LlmModel = options.TargetLanguage is not null ? options.Llm.Model : null,
-                PromptVersion = 2
-            });
-        var (translated, translatedArtifact) = await state.RunStageAsync(
-            StageNames.Translate,
-            translateFingerprint,
-            ct => TranslateAsync(corrected, options, gate, ct),
-            cancellationToken);
-
-        var exportFingerprint = StageFingerprint.Create(
-            StageNames.Export,
-            ExportVersion,
-            translatedArtifact.Sha256,
-            new { options.Layout, manifest.OutputPath });
-        var (exported, _) = await state.RunStageAsync(
-            StageNames.Export,
-            exportFingerprint,
-            ct => subtitlePublisher.PublishAsync(
-                translated,
-                manifest.OutputPath,
-                options.Layout,
-                options.Overwrite,
-                ct),
-            cancellationToken,
-            (artifact, ct) => subtitlePublisher.VerifyAsync(artifact, ct));
-
-        return exported;
     }
 
     private async Task<TranscriptDocument> TranscribeChunksAsync(
@@ -199,28 +271,34 @@ public sealed class PipelineRunner(
         TranscriptDocument transcript,
         PipelineOptions options,
         InferenceGate gate,
+        SourceKind sourceKind,
         CancellationToken cancellationToken)
     {
+        if (sourceKind == SourceKind.Subtitle && !options.EnableSegmentation)
+        {
+            var imported = transcript.Anchors.Select((anchor, index) => new SubtitleCue(
+                $"c{index + 1:D6}",
+                anchor.StartMs,
+                anchor.EndMs,
+                anchor.Text,
+                TimingOrigin: anchor.Origin)).ToArray();
+            EnsureValidTimeline(imported, transcript.MediaDurationMs, "import");
+            return new(transcript.Language, null, transcript.MediaDurationMs, imported);
+        }
+
         var anchors = AnchorEstimator.EnsureSplittableAnchors(transcript.Anchors);
         IReadOnlyList<string> boundaries = [];
 
         if (options.EnableSegmentation && anchors.Count > 0)
         {
-            boundaries = await gate.RunLlmAsync(
-                () => llmClient.SelectCueBoundariesAsync(
-                    anchors,
-                    options.Llm,
-                    transcript.Language,
-                    options.MaxCueCharacters,
-                    options.MaxCueDurationMs,
-                    cancellationToken),
-                cancellationToken);
+            boundaries = await SelectBoundariesAsync(anchors, transcript.Language, options, gate, cancellationToken);
         }
 
         var cues = CueSegmenter.BuildCues(
             anchors,
             boundaries,
-            options.MaxCueCharacters,
+            options.EffectiveMaxCueCharactersCjk,
+            options.EffectiveMaxCueWordsLatin,
             options.MaxCueDurationMs);
         EnsureValidTimeline(cues, transcript.MediaDurationMs, "segmentation");
         return new(transcript.Language, null, transcript.MediaDurationMs, cues);
@@ -237,12 +315,15 @@ public sealed class PipelineRunner(
             return document;
         }
 
-        var values = await gate.RunLlmAsync(
-            () => llmClient.CorrectAsync(
-                document.Cues,
+        var values = await MapCuesAsync(
+            document.Cues,
+            (window, token) => llmClient.CorrectAsync(
+                window,
                 options.Llm,
                 document.SourceLanguage,
-                cancellationToken),
+                options.ReferenceText,
+                token),
+            gate,
             cancellationToken);
         EnsureExactCueMapping(document.Cues, values, "correction");
 
@@ -265,12 +346,15 @@ public sealed class PipelineRunner(
             return document;
         }
 
-        var values = await gate.RunLlmAsync(
-            () => llmClient.TranslateAsync(
-                document.Cues,
+        var values = await MapCuesAsync(
+            document.Cues,
+            (window, token) => llmClient.TranslateAsync(
+                window,
                 options.Llm,
                 options.TargetLanguage,
-                cancellationToken),
+                options.ReferenceText,
+                token),
+            gate,
             cancellationToken);
         EnsureExactCueMapping(document.Cues, values, "translation");
 
@@ -282,6 +366,111 @@ public sealed class PipelineRunner(
                 TranslatedText = values[cue.Id].Trim()
             }).ToArray()
         };
+    }
+
+    private async Task<IReadOnlyList<string>> SelectBoundariesAsync(
+        IReadOnlyList<TimedAnchor> anchors,
+        string? language,
+        PipelineOptions options,
+        InferenceGate gate,
+        CancellationToken cancellationToken)
+    {
+        var windows = Chunk(anchors, LlmWindows.AnchorWindowSize);
+        var results = new IReadOnlyList<string>[windows.Count];
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, windows.Count),
+            new ParallelOptions { CancellationToken = cancellationToken },
+            async (index, token) =>
+            {
+                results[index] = await gate.RunLlmAsync(
+                    () => llmClient.SelectCueBoundariesAsync(
+                        windows[index],
+                        options.Llm,
+                        language,
+                        options.EffectiveMaxCueCharactersCjk,
+                        options.EffectiveMaxCueWordsLatin,
+                        options.MaxCueDurationMs,
+                        options.ReferenceText,
+                        token),
+                    token);
+            });
+
+        var boundaries = new List<string>();
+        for (var index = 0; index < windows.Count; index++)
+        {
+            boundaries.AddRange(results[index]);
+            if (index < windows.Count - 1)
+            {
+                var edge = windows[index][^1].Id;
+                if (!boundaries.Contains(edge, StringComparer.Ordinal))
+                {
+                    boundaries.Add(edge);
+                }
+            }
+        }
+
+        return boundaries;
+    }
+
+    private async Task<IReadOnlyDictionary<string, string>> MapCuesAsync(
+        IReadOnlyList<SubtitleCue> cues,
+        Func<IReadOnlyList<SubtitleCue>, CancellationToken, Task<IReadOnlyDictionary<string, string>>> operation,
+        InferenceGate gate,
+        CancellationToken cancellationToken)
+    {
+        var windows = Chunk(cues, LlmWindows.CueWindowSize);
+        var results = new IReadOnlyDictionary<string, string>[windows.Count];
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, windows.Count),
+            new ParallelOptions { CancellationToken = cancellationToken },
+            async (index, token) =>
+            {
+                results[index] = await gate.RunLlmAsync(() => operation(windows[index], token), token);
+            });
+
+        var merged = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var window in results)
+        {
+            foreach (var pair in window)
+            {
+                merged.Add(pair.Key, pair.Value);
+            }
+        }
+
+        return merged;
+    }
+
+    private static IReadOnlyList<IReadOnlyList<T>> Chunk<T>(IReadOnlyList<T> items, int size)
+    {
+        if (items.Count == 0)
+        {
+            return [];
+        }
+
+        var windows = new List<IReadOnlyList<T>>();
+        for (var offset = 0; offset < items.Count; offset += size)
+        {
+            var length = Math.Min(size, items.Count - offset);
+            var window = new T[length];
+            for (var index = 0; index < length; index++)
+            {
+                window[index] = items[offset + index];
+            }
+
+            windows.Add(window);
+        }
+
+        return windows;
+    }
+
+    private static TranscriptDocument ToTranscript(SubtitleDocument document)
+    {
+        var anchors = document.Cues.Select(cue =>
+        {
+            var source = cue.SourceText.Split('\n', StringSplitOptions.None)[0].Trim();
+            return new TimedAnchor(cue.Id, source, cue.StartMs, cue.EndMs, cue.TimingOrigin);
+        }).ToArray();
+        return new(document.SourceLanguage, document.MediaDurationMs, anchors);
     }
 
     private static void EnsureExactCueMapping(

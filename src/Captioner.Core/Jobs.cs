@@ -36,6 +36,12 @@ public sealed record StageRecord(
     DateTimeOffset? StartedAt = null,
     DateTimeOffset? CompletedAt = null);
 
+public enum SourceKind
+{
+    Media,
+    Subtitle
+}
+
 public sealed record JobManifest(
     int SchemaVersion,
     string JobId,
@@ -46,7 +52,8 @@ public sealed record JobManifest(
     string OutputPath,
     IReadOnlyDictionary<string, StageRecord> Stages,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    SourceKind SourceKind = SourceKind.Media);
 
 public sealed record BatchJob(string JobId, string InputPath, string RelativeInputPath);
 

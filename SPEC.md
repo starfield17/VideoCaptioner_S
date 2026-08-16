@@ -15,7 +15,7 @@ Done means:
 
 - Do not burn, mux, render, or synthesize subtitles into video.
 - Do not add TTS, media downloading, or online asset management.
-- Do not accept existing subtitle files as input in v1; media goes in and SRT comes out.
+- Do not accept ASS/VTT as input; media and SRT may go in, and SRT comes out.
 - Do not add a database, distributed workers, multi-process leases, or a plugin framework.
 - Do not implement automatic background model downloads or GPU lifecycle management.
 - Do not copy code, prompts, tests, or assets from the GPL reference repository.

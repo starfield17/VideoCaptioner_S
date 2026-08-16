@@ -1,13 +1,39 @@
-using System.Globalization;
 using System.Security.Cryptography;
 using Captioner.Core;
 using Captioner.Engine;
 
 namespace Captioner.Infrastructure;
 
-/// <summary>Validating, atomically published SRT sidecar writer.</summary>
-public sealed class SrtSubtitlePublisher : ISubtitlePublisher
+/// <summary>Validating, atomically published SRT sidecar writer and importer.</summary>
+public sealed class SrtSubtitlePublisher : ISubtitlePublisher, ISubtitleImporter
 {
+    public async Task<SubtitleDocument> ImportAsync(string path, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var fullPath = Path.GetFullPath(path);
+        if (!File.Exists(fullPath))
+        {
+            throw new FileNotFoundException("Subtitle file was not found.", fullPath);
+        }
+
+        var parsed = SrtDocument.Parse(await File.ReadAllTextAsync(fullPath, cancellationToken));
+        if (parsed.Count == 0)
+        {
+            throw new InvalidDataException("The subtitle file does not contain any cues.");
+        }
+
+        var duration = parsed[^1].EndMs;
+        var validation = TimelineValidator.ValidateCues(parsed, duration);
+        if (!validation.IsValid)
+        {
+            throw new InvalidDataException(
+                "Imported subtitle timeline is invalid: " +
+                string.Join("; ", validation.Issues.Select(issue => issue.Message)));
+        }
+
+        return new(null, null, duration, parsed);
+    }
+
     public async Task<ExportArtifact> PublishAsync(
         SubtitleDocument document,
         string outputPath,
@@ -30,7 +56,7 @@ public sealed class SrtSubtitlePublisher : ISubtitlePublisher
         var temporaryPath = fullPath + ".tmp-" + Guid.NewGuid().ToString("N");
         try
         {
-            var text = Render(document, layout);
+            var text = SrtDocument.Render(document, layout);
             await using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 64 * 1024, useAsync: true))
             await using (var writer = new StreamWriter(stream, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false), 4096, leaveOpen: true))
             {
@@ -40,7 +66,7 @@ public sealed class SrtSubtitlePublisher : ISubtitlePublisher
                 stream.Flush(flushToDisk: true);
             }
 
-            var parsed = await ParseAsync(temporaryPath, cancellationToken);
+            var parsed = SrtDocument.Parse(await File.ReadAllTextAsync(temporaryPath, cancellationToken));
             if (parsed.Count != document.Cues.Count || !TimelineValidator.ValidateCues(parsed, document.MediaDurationMs).IsValid)
             {
                 throw new InvalidDataException("The staged SRT failed independent parser validation.");
@@ -69,7 +95,7 @@ public sealed class SrtSubtitlePublisher : ISubtitlePublisher
 
         try
         {
-            var parsed = await ParseAsync(artifact.OutputPath, cancellationToken);
+            var parsed = SrtDocument.Parse(await File.ReadAllTextAsync(artifact.OutputPath, cancellationToken));
             if (parsed.Count != artifact.CueCount || !TimelineValidator.ValidateCues(parsed, long.MaxValue).IsValid)
             {
                 return false;
@@ -99,125 +125,6 @@ public sealed class SrtSubtitlePublisher : ISubtitlePublisher
         {
             throw new InvalidDataException("Translated SRT output requires translated text for every cue.");
         }
-    }
-
-    private static string Render(SubtitleDocument document, SubtitleLayout layout)
-    {
-        var builder = new System.Text.StringBuilder();
-        for (var index = 0; index < document.Cues.Count; index++)
-        {
-            var cue = document.Cues[index];
-            builder.Append(index + 1).Append('\n');
-            builder.Append(FormatTime(cue.StartMs)).Append(" --> ").Append(FormatTime(cue.EndMs)).Append('\n');
-            var source = cue.SourceText.Trim();
-            var target = cue.TranslatedText?.Trim();
-            switch (layout)
-            {
-                case SubtitleLayout.Source:
-                    builder.Append(source);
-                    break;
-                case SubtitleLayout.Target:
-                    builder.Append(target);
-                    break;
-                case SubtitleLayout.Bilingual:
-                    builder.Append(source);
-                    if (!string.IsNullOrWhiteSpace(target))
-                    {
-                        builder.Append('\n').Append(target);
-                    }
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(layout), layout, "Unknown subtitle layout.");
-            }
-
-            builder.Append("\n\n");
-        }
-
-        return builder.ToString();
-    }
-
-    private static async Task<IReadOnlyList<SubtitleCue>> ParseAsync(string path, CancellationToken cancellationToken)
-    {
-        var input = await File.ReadAllTextAsync(path, cancellationToken);
-        var lines = input.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Split('\n');
-        var cues = new List<SubtitleCue>();
-        var lineIndex = 0;
-        while (lineIndex < lines.Length)
-        {
-            while (lineIndex < lines.Length && string.IsNullOrWhiteSpace(lines[lineIndex]))
-            {
-                lineIndex++;
-            }
-
-            if (lineIndex >= lines.Length)
-            {
-                break;
-            }
-
-            if (!int.TryParse(lines[lineIndex].Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var number) || number != cues.Count + 1)
-            {
-                throw new InvalidDataException("SRT cue numbers must be contiguous.");
-            }
-
-            lineIndex++;
-            if (lineIndex >= lines.Length)
-            {
-                throw new InvalidDataException("SRT cue is missing its timing line.");
-            }
-
-            var timing = lines[lineIndex].Split(" --> ", StringSplitOptions.None);
-            if (timing.Length != 2 || !TryParseTime(timing[0], out var start) || !TryParseTime(timing[1], out var end))
-            {
-                throw new InvalidDataException("SRT cue has an invalid timing line.");
-            }
-
-            lineIndex++;
-            var textLines = new List<string>();
-            while (lineIndex < lines.Length && !string.IsNullOrWhiteSpace(lines[lineIndex]))
-            {
-                textLines.Add(lines[lineIndex]);
-                lineIndex++;
-            }
-
-            var text = string.Join('\n', textLines).Trim();
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                throw new InvalidDataException("SRT cue text cannot be empty.");
-            }
-
-            cues.Add(new($"c{number:D6}", start, end, text));
-        }
-
-        return cues;
-    }
-
-    private static string FormatTime(long milliseconds)
-    {
-        if (milliseconds < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(milliseconds));
-        }
-
-        var value = TimeSpan.FromMilliseconds(milliseconds);
-        var hours = (long)value.TotalHours;
-        return $"{hours:00}:{value.Minutes:00}:{value.Seconds:00},{value.Milliseconds:000}";
-    }
-
-    private static bool TryParseTime(string value, out long milliseconds)
-    {
-        milliseconds = 0;
-        var parts = value.Trim().Split([':', ','], StringSplitOptions.None);
-        if (parts.Length != 4 || !int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var hours) ||
-            !int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var minutes) ||
-            !int.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out var seconds) ||
-            !int.TryParse(parts[3], NumberStyles.None, CultureInfo.InvariantCulture, out var fraction) ||
-            hours < 0 || minutes is < 0 or > 59 || seconds is < 0 or > 59 || fraction is < 0 or > 999)
-        {
-            return false;
-        }
-
-        milliseconds = checked(((hours * 60L + minutes) * 60 + seconds) * 1000 + fraction);
-        return true;
     }
 
     private static async Task<string> HashFileAsync(string path, CancellationToken cancellationToken)

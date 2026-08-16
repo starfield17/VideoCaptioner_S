@@ -21,7 +21,9 @@ public static partial class Program
         WriteIndented = true
     };
 
-    public static async Task<int> Main(string[] args)
+    public static Task<int> Main(string[] args) => RunAsync(args);
+
+    public static async Task<int> RunAsync(string[] args)
     {
         var root = CreateRootCommand();
         var parseResult = root.Parse(args);
@@ -116,6 +118,23 @@ public static partial class Program
             using var host = BuildHost(result.GetValue(common.Config), result.GetValue(common.Workspace));
             var runner = host.Services.GetRequiredService<BatchRunner>();
             var options = LoadPipelineOptions(result, common, targetLanguage, layout);
+            if (discovered.All(item => item.Kind == SourceKind.Subtitle) &&
+                !WasSpecified(result, common.Segment) &&
+                !WasSpecified(result, common.NoSegment))
+            {
+                options = options with { EnableSegmentation = false };
+            }
+
+            foreach (var subtitle in discovered.Where(item => item.Kind == SourceKind.Subtitle))
+            {
+                var cues = SrtDocument.Parse(await File.ReadAllTextAsync(subtitle.Path, cancellationToken));
+                if (cues.Count == 0)
+                {
+                    await Console.Error.WriteLineAsync("The subtitle file does not contain any cues: " + subtitle.Path);
+                    return ExitCodes.UsageError;
+                }
+            }
+
             var batch = await runner.PrepareAsync(discovered, cancellationToken, options);
             await Console.Error.WriteLineAsync($"Batch prepared: {batch.BatchId}");
             var run = await runner.RunAsync(batch, options, cancellationToken);
@@ -164,8 +183,14 @@ public static partial class Program
             OptionalStringOption("--target-language", "Translate captions to this language."),
             OptionalStringOption("--layout", "source, target, or bilingual; inferred when omitted."),
             new Option<int>("--jobs") { Description = "Maximum files processed concurrently.", DefaultValueFactory = _ => 2 },
-            new Option<int>("--max-cue-characters") { Description = "Preferred maximum cue length.", DefaultValueFactory = _ => 42 },
+            new Option<int>("--max-cue-characters") { Description = "Legacy maximum cue graphemes; overrides CJK/word limits when specified." },
+            new Option<int>("--max-cue-cjk") { Description = "Preferred maximum CJK graphemes per cue.", DefaultValueFactory = _ => 18 },
+            new Option<int>("--max-cue-words") { Description = "Preferred maximum Latin words per cue.", DefaultValueFactory = _ => 12 },
             new Option<long>("--max-cue-duration-ms") { Description = "Preferred maximum cue duration.", DefaultValueFactory = _ => 7_000 },
+            new Option<int>("--llm-jobs") { Description = "Maximum concurrent LLM window calls.", DefaultValueFactory = _ => 4 },
+            new Option<string?>("--prompt") { Description = "Untrusted glossary or manuscript used for correction and translation." },
+            new Option<string?>("--prompt-file") { Description = "Read --prompt from a UTF-8 file." },
+            new Option<bool>("--segment") { Description = "Force LLM semantic boundary selection, including for SRT inputs." },
             new Option<bool>("--no-segment") { Description = "Disable LLM semantic boundary selection." },
             new Option<bool>("--no-correct") { Description = "Disable LLM source-caption correction." },
             new Option<bool>("--overwrite") { Description = "Atomically replace existing output SRT files." },
@@ -190,25 +215,43 @@ public static partial class Program
         var asr = asrName is null ? configuration.Asr : configuration.GetProfile(asrName);
         var llm = llmName is null ? configuration.Llm : configuration.GetProfile(llmName);
         var jobs = result.GetValue(options.Jobs);
-        var maxCharacters = result.GetValue(options.MaxCueCharacters);
+        var maxCharactersSpecified = WasSpecified(result, options.MaxCueCharacters);
+        var maxCharacters = maxCharactersSpecified ? result.GetValue(options.MaxCueCharacters) : 42;
+        var maxCjk = WasSpecified(result, options.MaxCueCjk)
+            ? result.GetValue(options.MaxCueCjk)
+            : maxCharactersSpecified ? maxCharacters : 18;
+        var maxWords = WasSpecified(result, options.MaxCueWords)
+            ? result.GetValue(options.MaxCueWords)
+            : maxCharactersSpecified ? 0 : 12;
         var maxDuration = result.GetValue(options.MaxCueDurationMs);
-        if (jobs < 1 || maxCharacters < 1 || maxDuration < 1)
+        var llmJobs = WasSpecified(result, options.LlmJobs)
+            ? result.GetValue(options.LlmJobs)
+            : Math.Max(1, llm.MaxConcurrency);
+        if (jobs < 1 || maxCharacters < 1 || maxCjk < 1 || maxWords < 0 || maxDuration < 1 || llmJobs < 1)
         {
-            throw new ArgumentException("--jobs, --max-cue-characters, and --max-cue-duration-ms must be positive.");
+            throw new ArgumentException("Concurrency and cue-limit options must be positive.");
+        }
+
+        if (WasSpecified(result, options.Segment) && WasSpecified(result, options.NoSegment))
+        {
+            throw new ArgumentException("Use either --segment or --no-segment, not both.");
         }
 
         return new(
             asr,
-            llm,
+            llm with { MaxConcurrency = llmJobs },
             NullIfWhiteSpace(result.GetValue(options.SourceLanguage)),
             targetLanguage,
             layout,
-            !result.GetValue(options.NoSegment),
+            result.GetValue(options.Segment) || !result.GetValue(options.NoSegment),
             !result.GetValue(options.NoCorrect),
             maxCharacters,
             maxDuration,
             jobs,
-            result.GetValue(options.Overwrite));
+            result.GetValue(options.Overwrite),
+            ReadReferenceText(result, options),
+            maxCjk,
+            maxWords);
     }
 
     private static PipelineOptions LoadResumeOptions(
@@ -229,8 +272,12 @@ public static partial class Program
             options.TargetLanguage,
             options.Layout,
             options.NoSegment,
-            options.NoCorrect,
+            options.Segment,
             options.MaxCueCharacters,
+            options.MaxCueCjk,
+            options.MaxCueWords,
+            options.Prompt,
+            options.PromptFile,
             options.MaxCueDurationMs
         };
         if (contentOverrides.Any(option => WasSpecified(result, option)))
@@ -253,7 +300,12 @@ public static partial class Program
         return saved with
         {
             Asr = asr,
-            Llm = llm,
+            Llm = llm with
+            {
+                MaxConcurrency = WasSpecified(result, options.LlmJobs)
+                    ? result.GetValue(options.LlmJobs)
+                    : Math.Max(1, llm.MaxConcurrency)
+            },
             MaxFileConcurrency = WasSpecified(result, options.Jobs)
                 ? result.GetValue(options.Jobs)
                 : saved.MaxFileConcurrency,
@@ -271,14 +323,17 @@ public static partial class Program
         var configuration = loader.LoadWithEnvironment();
         builder.Services.AddSingleton(loader);
         builder.Services.AddSingleton(configuration);
-        builder.Services.AddSingleton<IJobWorkspace>(new FileJobWorkspace(workspacePath));
+        builder.Services.AddSingleton<IJobWorkspace>(new FileJobWorkspace(
+            string.IsNullOrWhiteSpace(workspacePath) ? configuration.WorkspaceDirectory : workspacePath));
         builder.Services.AddSingleton<FfmpegMediaTool>();
         builder.Services.AddSingleton<IMediaTool>(services => services.GetRequiredService<FfmpegMediaTool>());
         builder.Services.AddSingleton<IAsrClient>(_ => new RoutingAsrClient(
             configuration.ModelDirectory,
             new HttpClient { Timeout = TimeSpan.FromHours(2) }));
         builder.Services.AddSingleton<ILlmClient>(_ => new OpenAiLlmClient(new HttpClient { Timeout = TimeSpan.FromMinutes(20) }));
-        builder.Services.AddSingleton<ISubtitlePublisher, SrtSubtitlePublisher>();
+        builder.Services.AddSingleton<SrtSubtitlePublisher>();
+        builder.Services.AddSingleton<ISubtitlePublisher>(services => services.GetRequiredService<SrtSubtitlePublisher>());
+        builder.Services.AddSingleton<ISubtitleImporter>(services => services.GetRequiredService<SrtSubtitlePublisher>());
         builder.Services.AddSingleton<PipelineRunner>();
         builder.Services.AddSingleton<BatchRunner>();
         return builder.Build();
@@ -418,6 +473,30 @@ public static partial class Program
         ? StringComparer.OrdinalIgnoreCase
         : StringComparer.Ordinal;
 
+    private static string? ReadReferenceText(ParseResult result, PipelineCommand options)
+    {
+        var prompt = NullIfWhiteSpace(result.GetValue(options.Prompt));
+        var promptFile = NullIfWhiteSpace(result.GetValue(options.PromptFile));
+        if (prompt is not null && promptFile is not null)
+        {
+            throw new ArgumentException("Use either --prompt or --prompt-file, not both.");
+        }
+
+        if (promptFile is null)
+        {
+            return prompt;
+        }
+
+        var path = Path.GetFullPath(promptFile);
+        if (!File.Exists(path))
+        {
+            throw new FileNotFoundException("Prompt file was not found.", path);
+        }
+
+        var text = File.ReadAllText(path);
+        return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+    }
+
     private static string? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static bool WasSpecified(ParseResult result, Option option) => result.GetResult(option) is { Implicit: false };
@@ -442,7 +521,13 @@ public static partial class Program
         Option<string?> Layout,
         Option<int> Jobs,
         Option<int> MaxCueCharacters,
+        Option<int> MaxCueCjk,
+        Option<int> MaxCueWords,
         Option<long> MaxCueDurationMs,
+        Option<int> LlmJobs,
+        Option<string?> Prompt,
+        Option<string?> PromptFile,
+        Option<bool> Segment,
         Option<bool> NoSegment,
         Option<bool> NoCorrect,
         Option<bool> Overwrite,
@@ -450,6 +535,7 @@ public static partial class Program
     {
         public IEnumerable<Option> AllOptions =>
         [Config, Workspace, AsrProfile, LlmProfile, SourceLanguage, TargetLanguage, Layout, Jobs,
-            MaxCueCharacters, MaxCueDurationMs, NoSegment, NoCorrect, Overwrite, Json];
+            MaxCueCharacters, MaxCueCjk, MaxCueWords, MaxCueDurationMs, LlmJobs, Prompt, PromptFile,
+            Segment, NoSegment, NoCorrect, Overwrite, Json];
     }
 }

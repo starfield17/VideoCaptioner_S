@@ -16,11 +16,13 @@ public sealed class FileJobWorkspace : IJobWorkspace
 
     private readonly string _rootDirectory;
 
+    public static string DefaultRootDirectory => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Captioner");
+
     public FileJobWorkspace(string? rootDirectory = null)
     {
-        _rootDirectory = Path.GetFullPath(rootDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Captioner"));
+        _rootDirectory = Path.GetFullPath(rootDirectory ?? DefaultRootDirectory);
         Directory.CreateDirectory(_rootDirectory);
     }
 

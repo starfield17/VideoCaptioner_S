@@ -14,14 +14,16 @@ public static partial class Program
             Description = "Optional batch identifier. Omit to list batches.",
             Arity = ArgumentArity.ZeroOrOne
         };
+        var config = OptionalStringOption("--config", "Configuration file override.");
         var workspaceOption = OptionalStringOption("--workspace", "Workspace root override.");
         var json = new Option<bool>("--json") { Description = "Write machine-readable JSON." };
         command.Arguments.Add(batchId);
+        command.Options.Add(config);
         command.Options.Add(workspaceOption);
         command.Options.Add(json);
         command.SetAction(async (result, cancellationToken) =>
         {
-            var workspace = new FileJobWorkspace(result.GetValue(workspaceOption));
+            var workspace = OpenConfiguredWorkspace(result.GetValue(config), result.GetValue(workspaceOption));
             var id = NullIfWhiteSpace(result.GetValue(batchId));
             if (id is null)
             {
@@ -224,12 +226,14 @@ public static partial class Program
     {
         var command = new Command("clean", "Delete one saved batch and its job-local artifacts.");
         var batchId = new Argument<string>("batch-id");
+        var config = OptionalStringOption("--config", "Configuration file override.");
         var workspace = OptionalStringOption("--workspace", "Workspace root override.");
         command.Arguments.Add(batchId);
+        command.Options.Add(config);
         command.Options.Add(workspace);
         command.SetAction(async (result, cancellationToken) =>
         {
-            var store = new FileJobWorkspace(result.GetValue(workspace));
+            var store = OpenConfiguredWorkspace(result.GetValue(config), result.GetValue(workspace));
             var id = result.GetRequiredValue(batchId);
             if (await store.LoadBatchAsync(id, cancellationToken) is null)
             {
@@ -242,5 +246,16 @@ public static partial class Program
             return ExitCodes.Success;
         });
         return command;
+    }
+
+    private static FileJobWorkspace OpenConfiguredWorkspace(string? configPath, string? workspacePath)
+    {
+        if (!string.IsNullOrWhiteSpace(workspacePath))
+        {
+            return new FileJobWorkspace(workspacePath);
+        }
+
+        var configuration = new JsonConfigurationLoader(configPath).Load();
+        return new FileJobWorkspace(configuration.WorkspaceDirectory);
     }
 }

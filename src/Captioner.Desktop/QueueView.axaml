@@ -1,0 +1,238 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Captioner.Desktop"
+             x:Class="Captioner.Desktop.QueueView"
+             x:DataType="local:QueueView"
+             MinWidth="720"
+             MinHeight="460"
+             FontFamily="Inter">
+  <UserControl.Styles>
+    <Style Selector="TextBlock.display">
+      <Setter Property="FontSize" Value="26" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+      <Setter Property="LetterSpacing" Value="-0.5" />
+    </Style>
+    <Style Selector="TextBlock.eyebrow">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Foreground" Value="{StaticResource PrimaryBrush}" />
+      <Setter Property="LetterSpacing" Value="1.4" />
+    </Style>
+    <Style Selector="Border.queue-row">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="7" />
+    </Style>
+    <Style Selector="Border.queue-row:pointerover">
+      <Setter Property="Background" Value="{StaticResource SoftBlueBrush}" />
+    </Style>
+    <Style Selector="Border.table-header">
+      <Setter Property="Background" Value="{StaticResource SoftBlueBrush}" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="Border.status-pill">
+      <Setter Property="CornerRadius" Value="12" />
+    </Style>
+    <Style Selector="Border.stage-detail">
+      <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="7" />
+    </Style>
+    <Style Selector="Border.empty-state">
+      <Setter Property="Background" Value="{StaticResource SoftBlueBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+    </Style>
+    <Style Selector="Border.tag">
+      <Setter Property="Background" Value="{StaticResource SoftBlueBrush}" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="8,3" />
+    </Style>
+    <Style Selector="Border.accent-bar">
+      <Setter Property="Background" Value="{StaticResource PrimaryBrush}" />
+    </Style>
+  </UserControl.Styles>
+  <Grid Classes="queue-shell" RowDefinitions="Auto,Auto,*,Auto" Margin="30,26,30,28">
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="18" Margin="0,0,0,18">
+      <StackPanel Spacing="4">
+        <TextBlock Classes="eyebrow" Text="BATCH QUEUE" />
+        <TextBlock Classes="display" Text="Queue" />
+        <TextBlock Classes="caption" Text="Track recoverable caption jobs and inspect their stage history." />
+      </StackPanel>
+      <StackPanel Grid.Column="1" Spacing="6" MinWidth="260">
+        <TextBlock Classes="label" Text="RECENT BATCHES" />
+        <ComboBox x:Name="RecentBatchBox"
+                  Classes="field"
+                  ItemsSource="{Binding RecentBatches}"
+                  SelectedItem="{Binding SelectedBatch, Mode=TwoWay}"
+                  PlaceholderText="Choose a batch">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="local:BatchListItem">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel>
+                  <TextBlock Text="{Binding DisplayLabel}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Classes="caption" Text="{Binding Details}" />
+                </StackPanel>
+                <TextBlock Grid.Column="1" Classes="mono caption" Text="{Binding BatchId}" />
+              </Grid>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </StackPanel>
+    </Grid>
+
+    <Border Grid.Row="1" Classes="subtle-card" Padding="16,13" Margin="0,0,0,16">
+      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+        <Border Width="8" Height="38" CornerRadius="4" Classes="accent-bar" />
+        <StackPanel Grid.Column="1" Spacing="3">
+          <TextBlock x:Name="StatusTextBlock" FontWeight="SemiBold" Text="{Binding StatusText}" />
+          <TextBlock Classes="caption" Text="{Binding ActivityText}" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" HorizontalAlignment="Right" Spacing="2">
+          <TextBlock Classes="label" HorizontalAlignment="Right" Text="SUMMARY" />
+          <TextBlock x:Name="SummaryTextBlock" FontWeight="SemiBold" Text="{Binding SummaryText}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="2" ColumnDefinitions="*,350" ColumnSpacing="16">
+      <Border Classes="card" Padding="14,12">
+        <Grid RowDefinitions="Auto,Auto,*">
+          <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,11">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock FontWeight="SemiBold" Text="Jobs" />
+              <Border Classes="tag">
+                <TextBlock Classes="caption" Text="{Binding TotalJobs, StringFormat='{}{0} total'}" />
+              </Border>
+            </StackPanel>
+            <TextBlock Grid.Column="1" Classes="caption" Text="Select a job for details" />
+          </Grid>
+
+          <Border Grid.Row="1" Classes="table-header" Padding="9,7">
+            <Grid ColumnDefinitions="2.1*,78,80,96,118,1.4*" ColumnSpacing="8">
+              <TextBlock Classes="label" Text="FILE" />
+              <TextBlock Grid.Column="1" Classes="label" Text="TYPE" />
+              <TextBlock Grid.Column="2" Classes="label" Text="PROGRESS" />
+              <TextBlock Grid.Column="3" Classes="label" Text="STAGE" />
+              <TextBlock Grid.Column="4" Classes="label" Text="STATUS" />
+              <TextBlock Grid.Column="5" Classes="label" Text="OUTPUT" />
+            </Grid>
+          </Border>
+
+          <Grid Grid.Row="2">
+            <ListBox x:Name="JobList"
+                     ItemsSource="{Binding Jobs}"
+                     SelectedItem="{Binding SelectedJob, Mode=TwoWay}"
+                     Background="Transparent"
+                     BorderThickness="0">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="local:JobRow">
+                  <Border Classes="queue-row" Padding="9,10" Margin="0,2">
+                    <Grid ColumnDefinitions="2.1*,78,80,96,118,1.4*" ColumnSpacing="8" MinHeight="34">
+                      <StackPanel Spacing="2">
+                        <TextBlock FontWeight="SemiBold" Text="{Binding FileName}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Classes="caption" Text="{Binding InputPath}" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="1" Classes="caption" VerticalAlignment="Center" Text="{Binding Type}" />
+                      <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="3">
+                        <ProgressBar Classes="compact" Height="5" Minimum="0" Maximum="100" Value="{Binding Progress}" />
+                        <TextBlock Classes="mono caption" Text="{Binding ProgressLabel}" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="3" Classes="caption" VerticalAlignment="Center" Text="{Binding CurrentStage}" TextTrimming="CharacterEllipsis" />
+                      <Border Grid.Column="4" Classes="status-pill" Background="{Binding StatusBackground}" Padding="7,4" VerticalAlignment="Center">
+                        <TextBlock Foreground="{Binding StatusForeground}" FontSize="11" Text="{Binding Status}" TextTrimming="CharacterEllipsis" />
+                      </Border>
+                      <TextBlock Grid.Column="5" Classes="caption" VerticalAlignment="Center" Text="{Binding OutputPath}" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+
+            <Border x:Name="EmptyState"
+                    Classes="empty-state"
+                    IsVisible="{Binding !HasJobs}"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    MaxWidth="320"
+                    Padding="24">
+              <StackPanel Spacing="8" HorizontalAlignment="Center">
+                <TextBlock FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" Text="Your queue is empty" />
+                <TextBlock Classes="caption" TextWrapping="Wrap" TextAlignment="Center" Text="Start a new batch to see files, progress, and recoverable stages here." />
+              </StackPanel>
+            </Border>
+          </Grid>
+        </Grid>
+      </Border>
+
+      <Border Grid.Column="1" Classes="card" Padding="16,14">
+        <Grid RowDefinitions="Auto,*">
+          <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+            <StackPanel Spacing="3">
+              <TextBlock Classes="label" Text="CAPTION TRACK" />
+              <TextBlock FontWeight="SemiBold" Text="Selected job" />
+            </StackPanel>
+            <TextBlock Grid.Column="1" Classes="mono caption" Text="{Binding SelectedJob.JobId}" TextTrimming="CharacterEllipsis" MaxWidth="120" />
+          </Grid>
+
+          <Grid Grid.Row="1">
+            <Border x:Name="JobDetailPanel" Classes="subtle-card" IsVisible="{Binding HasSelectedJob}" Padding="12">
+              <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="12">
+                  <StackPanel Spacing="3">
+                    <TextBlock FontWeight="SemiBold" Text="{Binding SelectedJob.FileName}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Classes="caption" Text="{Binding SelectedJob.Type}" />
+                    <TextBlock Classes="mono caption" Text="{Binding SelectedJob.ElapsedLabel, StringFormat='Elapsed: {0}'}" />
+                  </StackPanel>
+
+                  <ItemsControl x:Name="StageDetailList" ItemsSource="{Binding SelectedJob.Stages}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="local:StageMarker">
+                        <Border Classes="stage-detail" Padding="9,7" Margin="0,0,0,6">
+                          <Grid ColumnDefinitions="8,*,Auto" ColumnSpacing="9">
+                            <Border Width="8" Height="8" CornerRadius="4" Background="{Binding Fill}" VerticalAlignment="Top" Margin="0,3,0,0" />
+                            <StackPanel Grid.Column="1" Spacing="2">
+                              <TextBlock FontWeight="SemiBold" Text="{Binding Label}" />
+                              <TextBlock Classes="caption" Text="{Binding StateText}" />
+                            </StackPanel>
+                            <TextBlock Grid.Column="2" Classes="caption" Text="{Binding Diagnostic}" TextTrimming="CharacterEllipsis" MaxWidth="130" />
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+
+                  <StackPanel Spacing="6">
+                    <TextBlock Classes="label" Text="OUTPUT" />
+                    <TextBlock Classes="mono caption" Text="{Binding SelectedJob.OutputPath}" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <StackPanel Spacing="6" IsVisible="{Binding SelectedJob.HasDiagnostic}">
+                    <TextBlock Classes="label" Text="DIAGNOSTIC" />
+                    <TextBlock Classes="caption" Text="{Binding SelectedJob.Diagnostic}" TextWrapping="Wrap" />
+                  </StackPanel>
+                </StackPanel>
+              </ScrollViewer>
+            </Border>
+
+            <StackPanel x:Name="NoSelectionState" IsVisible="{Binding !HasSelectedJob}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="7" MaxWidth="240">
+              <TextBlock FontWeight="SemiBold" HorizontalAlignment="Center" Text="No job selected" />
+              <TextBlock Classes="caption" TextAlignment="Center" TextWrapping="Wrap" Text="Choose a row to inspect stage state, output, and diagnostics." />
+            </StackPanel>
+          </Grid>
+        </Grid>
+      </Border>
+    </Grid>
+
+    <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8" Margin="0,14,0,0">
+      <Button x:Name="ResumeButton" Classes="primary" Content="Resume batch" Click="Resume_Click" IsEnabled="{Binding CanResume}" />
+      <Button x:Name="StopButton" Classes="secondary" Content="Stop" Click="Stop_Click" IsEnabled="{Binding CanStop}" />
+      <Button x:Name="RevealOutputButton" Classes="ghost" Content="Reveal output" Click="RevealOutput_Click" IsEnabled="{Binding CanRevealOutput}" />
+      <Button x:Name="CopyDiagnosticButton" Classes="ghost" Content="Copy diagnostic" Click="CopyDiagnostic_Click" IsEnabled="{Binding CanCopyDiagnostic}" />
+      <Button x:Name="CleanButton" Classes="danger,ghost" Content="Clean batch" Click="Clean_Click" IsEnabled="{Binding CanClean}" />
+    </StackPanel>
+  </Grid>
+</UserControl>

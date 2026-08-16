@@ -33,20 +33,24 @@ public interface ILlmClient
         IReadOnlyList<TimedAnchor> anchors,
         EndpointProfile profile,
         string? language,
-        int maxCueCharacters,
+        int maxCueCharactersCjk,
+        int maxCueWordsLatin,
         long maxCueDurationMs,
+        string? referenceText,
         CancellationToken cancellationToken);
 
     Task<IReadOnlyDictionary<string, string>> CorrectAsync(
         IReadOnlyList<SubtitleCue> cues,
         EndpointProfile profile,
         string? language,
+        string? referenceText,
         CancellationToken cancellationToken);
 
     Task<IReadOnlyDictionary<string, string>> TranslateAsync(
         IReadOnlyList<SubtitleCue> cues,
         EndpointProfile profile,
         string targetLanguage,
+        string? referenceText,
         CancellationToken cancellationToken);
 
     Task<string?> CheckAsync(EndpointProfile profile, CancellationToken cancellationToken);
@@ -80,6 +84,11 @@ public interface IJobWorkspace
 
     Task<IReadOnlyList<string>> ListBatchIdsAsync(CancellationToken cancellationToken);
     Task CleanBatchAsync(string batchId, CancellationToken cancellationToken);
+}
+
+public interface ISubtitleImporter
+{
+    Task<SubtitleDocument> ImportAsync(string path, CancellationToken cancellationToken);
 }
 
 public interface ISubtitlePublisher

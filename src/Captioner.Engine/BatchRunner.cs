@@ -40,7 +40,8 @@ public sealed class BatchRunner(PipelineRunner pipeline, IJobWorkspace workspace
                 input.OutputPath,
                 stages,
                 now,
-                now);
+                now,
+                input.Kind);
             await workspace.SaveJobAsync(manifest, cancellationToken);
             batchJobs.Add(new(jobId, input.Path, input.RelativePath));
         }

@@ -78,6 +78,7 @@ public sealed class OpenAiAdapterContractTests
                 Assert.Equal("json_object", body.RootElement.GetProperty("response_format").GetProperty("type").GetString());
                 var userJson = body.RootElement.GetProperty("messages")[1].GetProperty("content").GetString()!;
                 using var user = JsonDocument.Parse(userJson);
+                Assert.Equal("glossary: ACME", user.RootElement.GetProperty("reference").GetString());
                 var values = user.RootElement.GetProperty("cues").EnumerateArray().ToDictionary(
                     cue => cue.GetProperty("id").GetString()!,
                     cue => "fixed:" + cue.GetProperty("text").GetString(),
@@ -97,9 +98,9 @@ public sealed class OpenAiAdapterContractTests
             var cues = Enumerable.Range(1, 81).Select(index =>
                 new SubtitleCue($"c{index:D6}", index * 1_000, index * 1_000 + 900, "text " + index)).ToArray();
 
-            var corrected = await client.CorrectAsync(cues, profile, "en", CancellationToken.None);
+            var corrected = await client.CorrectAsync(cues, profile, "en", "glossary: ACME", CancellationToken.None);
 
-            Assert.Equal(2, callCount);
+            Assert.Equal(1, callCount);
             Assert.Equal(cues.Select(cue => cue.Id), corrected.Keys);
             Assert.Equal("fixed:text 81", corrected["c000081"]);
         }
@@ -133,7 +134,50 @@ public sealed class OpenAiAdapterContractTests
                 [new SubtitleCue("c000001", 0, 1_000, "hello")],
                 profile,
                 "zh-CN",
+                null,
                 CancellationToken.None));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(keyName, null);
+        }
+    }
+
+    [Fact]
+    public async Task Llm_adapter_retries_invalid_ids_then_accepts_a_valid_mapping()
+    {
+        var keyName = "CAPTIONER_TEST_KEY_" + Guid.NewGuid().ToString("N");
+        Environment.SetEnvironmentVariable(keyName, "test-secret");
+        var callCount = 0;
+        try
+        {
+            var handler = new DelegateHandler(_ =>
+            {
+                callCount++;
+                var content = callCount == 1
+                    ? """{"wrong":"nope"}"""
+                    : """{"c000001":"Hello there"}""";
+                return Task.FromResult(JsonResponse(JsonSerializer.Serialize(new
+                {
+                    choices = new[] { new { message = new { content } } }
+                })));
+            });
+            var client = new OpenAiLlmClient(new HttpClient(handler), TimeSpan.Zero);
+            var profile = new EndpointProfile(
+                "https://llm.example/v1",
+                "llm-test",
+                keyName,
+                new EndpointCapabilities(false, false, true, 0, TimeSpan.Zero));
+
+            var result = await client.CorrectAsync(
+                [new SubtitleCue("c000001", 0, 1_000, "Hello")],
+                profile,
+                "en",
+                null,
+                CancellationToken.None);
+
+            Assert.Equal(2, callCount);
+            Assert.Equal("Hello there", result["c000001"]);
         }
         finally
         {

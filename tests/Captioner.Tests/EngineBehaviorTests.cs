@@ -71,12 +71,47 @@ public sealed class EngineBehaviorTests
         var byCharacters = CueSegmenter.BuildCues(anchors, [], maxCueCharacters: 5, maxCueDurationMs: 10_000);
         var byDuration = CueSegmenter.BuildCues(anchors, [], maxCueCharacters: 100, maxCueDurationMs: 900);
 
+        var cjk = CueSegmenter.BuildCues(
+            [
+                new TimedAnchor("a", "你好世界朋友们", 0, 400, TimingOrigin.ProviderWord),
+                new TimedAnchor("b", "继续讲话内容", 400, 800, TimingOrigin.ProviderWord)
+            ],
+            [],
+            maxCueCharactersCjk: 4,
+            maxCueWordsLatin: 12,
+            maxCueDurationMs: 10_000);
+        var latinWords = CueSegmenter.BuildCues(
+            [
+                new TimedAnchor("a", "one two", 0, 400, TimingOrigin.ProviderWord),
+                new TimedAnchor("b", "three four", 400, 800, TimingOrigin.ProviderWord)
+            ],
+            [],
+            maxCueCharactersCjk: 80,
+            maxCueWordsLatin: 2,
+            maxCueDurationMs: 10_000);
+
         Assert.Equal(new[] { "aa bb", "cc dd" }, byCharacters.Select(cue => cue.SourceText));
         Assert.Equal(new[] { "aa bb cc", "dd" }, byDuration.Select(cue => cue.SourceText));
         Assert.Equal(new[] { (0L, 800L), (800L, 1_600L) }, byCharacters.Select(cue => (cue.StartMs, cue.EndMs)));
         Assert.Equal(new[] { (0L, 1_200L), (1_200L, 1_600L) }, byDuration.Select(cue => (cue.StartMs, cue.EndMs)));
         Assert.All(byCharacters.Concat(byDuration), cue => Assert.Equal(TimingOrigin.Estimated, cue.TimingOrigin));
         Assert.Equal(byCharacters.Select(cue => cue.Id), byDuration.Select(cue => cue.Id));
+        Assert.Equal(2, cjk.Count);
+        Assert.Equal("你好世界朋友们", cjk[0].SourceText);
+        Assert.Equal(2, latinWords.Count);
+        Assert.Equal("one two", latinWords[0].SourceText);
+    }
+
+    [Fact]
+    public void StageFingerprint_changes_when_reference_text_changes()
+    {
+        var left = StageFingerprint.Create("correct", 2, "up", new { Reference = StageFingerprint.ReferenceHash("alpha") });
+        var right = StageFingerprint.Create("correct", 2, "up", new { Reference = StageFingerprint.ReferenceHash("beta") });
+        var empty = StageFingerprint.Create("correct", 2, "up", new { Reference = StageFingerprint.ReferenceHash(null) });
+
+        Assert.NotEqual(left, right);
+        Assert.NotEqual(left, empty);
+        Assert.Equal(string.Empty, StageFingerprint.ReferenceHash("  "));
     }
 
     [Fact]

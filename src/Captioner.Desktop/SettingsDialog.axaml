@@ -1,0 +1,158 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Captioner.Desktop.SettingsDialog"
+        Title="Settings"
+        Width="820"
+        Height="720"
+        MinWidth="680"
+        MinHeight="560"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource CanvasBrush}">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="28,24,28,20">
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,20">
+      <StackPanel Spacing="4">
+        <TextBlock Classes="page-title" Text="Settings" />
+        <TextBlock Classes="caption" Text="Configure speech recognition, language models, reference text, and storage." />
+      </StackPanel>
+      <TextBlock Grid.Column="1" Classes="mono caption" VerticalAlignment="Center" Text="Changes are saved explicitly" />
+    </Grid>
+
+    <TabControl x:Name="CategoryTabs" Grid.Row="1" Classes="workbench">
+      <TabItem Header="Speech recognition">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="16" Margin="0,14,10,12">
+            <Border Classes="card">
+              <StackPanel Spacing="12">
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="section-title" Text="Speech backend" />
+                  <TextBlock Classes="caption" Text="Use a local sherpa-onnx model or an OpenAI-compatible transcription endpoint." />
+                </StackPanel>
+                <TextBlock Classes="label" Text="BACKEND" />
+                <ComboBox x:Name="AsrBackendBox" Classes="field" SelectedIndex="0">
+                  <ComboBoxItem Content="Local · sherpa-onnx" />
+                  <ComboBoxItem Content="Remote · OpenAI-compatible API" />
+                </ComboBox>
+
+                <StackPanel x:Name="AsrLocalPanel" Spacing="10">
+                  <TextBlock Classes="label" Text="LOCAL MODEL" />
+                  <ComboBox x:Name="AsrModelBox" Classes="field" IsEditable="True" />
+                  <Border Classes="subtle-card">
+                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12">
+                      <StackPanel Spacing="3">
+                        <TextBlock x:Name="AsrModelStatusText" Classes="section-title" Text="Choose a model" />
+                        <TextBlock x:Name="AsrModelDetailText" Classes="caption" Text="Models are downloaded only when requested." TextWrapping="Wrap" />
+                      </StackPanel>
+                      <Button x:Name="DownloadModelButton" Grid.Column="1" Classes="secondary" Content="Download" VerticalAlignment="Center" />
+                      <ProgressBar x:Name="ModelProgressBar" Grid.Row="1" Grid.ColumnSpan="2" Classes="compact" Margin="0,12,0,0" Minimum="0" Maximum="100" IsVisible="False" />
+                    </Grid>
+                  </Border>
+                </StackPanel>
+
+                <StackPanel x:Name="AsrRemotePanel" Spacing="10" IsVisible="False">
+                  <TextBlock Classes="label" Text="BASE URL" />
+                  <TextBox x:Name="AsrBaseUrlBox" Classes="field" PlaceholderText="https://api.openai.com/v1" />
+                  <TextBlock Classes="label" Text="MODEL" />
+                  <TextBox x:Name="AsrRemoteModelBox" Classes="field" PlaceholderText="whisper-1" />
+                  <TextBlock Classes="label" Text="API KEY" />
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <TextBox x:Name="AsrApiKeyBox" Classes="field" Grid.Column="0" PasswordChar="●" PlaceholderText="Optional API key" />
+                    <Button x:Name="AsrApiKeyVisibilityButton" Classes="ghost" Grid.Column="1" Content="Show" />
+                  </Grid>
+                  <TextBlock Classes="caption" Foreground="{DynamicResource WarningBrush}" Text="API keys are stored as plaintext in the configuration file." TextWrapping="Wrap" />
+                </StackPanel>
+
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                  <StackPanel Spacing="5">
+                    <TextBlock Classes="label" Text="ASR CONCURRENCY" />
+                    <NumericUpDown x:Name="AsrConcurrencyBox" Classes="field" Minimum="1" Maximum="16" Value="1" />
+                  </StackPanel>
+                  <Button x:Name="CheckAsrButton" Grid.Column="1" Classes="secondary" Content="Check connection" VerticalAlignment="Bottom" />
+                </Grid>
+                <TextBlock x:Name="AsrCheckStatusText" Classes="caption" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="Language model">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="16" Margin="0,14,10,12">
+            <Border Classes="card">
+              <StackPanel Spacing="12">
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="section-title" Text="OpenAI-compatible language model" />
+                  <TextBlock Classes="caption" Text="The language model is used for subtitle correction, segmentation, and translation." TextWrapping="Wrap" />
+                </StackPanel>
+                <TextBlock Classes="label" Text="BASE URL" />
+                <TextBox x:Name="LlmBaseUrlBox" Classes="field" PlaceholderText="https://api.deepseek.com" />
+                <TextBlock Classes="label" Text="MODEL" />
+                <TextBox x:Name="LlmModelBox" Classes="field" PlaceholderText="deepseek-v4-flash" />
+                <TextBlock Classes="label" Text="API KEY" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                  <TextBox x:Name="LlmApiKeyBox" Classes="field" Grid.Column="0" PasswordChar="●" PlaceholderText="Optional API key" />
+                  <Button x:Name="LlmApiKeyVisibilityButton" Classes="ghost" Grid.Column="1" Content="Show" />
+                </Grid>
+                <TextBlock Classes="caption" Foreground="{DynamicResource WarningBrush}" Text="API keys are stored as plaintext in the configuration file." TextWrapping="Wrap" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                  <StackPanel Spacing="5">
+                    <TextBlock Classes="label" Text="LLM CONCURRENCY" />
+                    <NumericUpDown x:Name="LlmConcurrencyBox" Classes="field" Minimum="1" Maximum="32" Value="4" />
+                  </StackPanel>
+                  <Button x:Name="CheckLlmButton" Grid.Column="1" Classes="secondary" Content="Check connection" VerticalAlignment="Bottom" />
+                </Grid>
+                <TextBlock x:Name="LlmCheckStatusText" Classes="caption" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="Reference">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="16" Margin="0,14,10,12">
+            <Border Classes="card">
+              <StackPanel Spacing="12">
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="section-title" Text="Default glossary" />
+                  <TextBlock Classes="caption" Text="This text is included as a terminology reference for new batches. A batch can add its own manuscript." TextWrapping="Wrap" />
+                </StackPanel>
+                <TextBlock Classes="label" Text="GLOBAL REFERENCE TEXT" />
+                <TextBox x:Name="ReferenceBox" Classes="field" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="260" VerticalContentAlignment="Top" PlaceholderText="Names, spelling, product terms, and other context" />
+                <TextBlock Classes="caption" Text="Reference text is captured in a batch fingerprint when a batch starts; changing this setting does not alter existing batches." TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="Storage">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="16" Margin="0,14,10,12">
+            <Border Classes="card">
+              <StackPanel Spacing="12">
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="section-title" Text="Storage locations" />
+                  <TextBlock Classes="caption" Text="Directories are created when they are first needed. Existing input files are never modified." TextWrapping="Wrap" />
+                </StackPanel>
+                <TextBlock Classes="label" Text="MODEL DIRECTORY" />
+                <TextBox x:Name="ModelDirectoryBox" Classes="field" PlaceholderText="Local speech model directory" />
+                <TextBlock Classes="label" Text="WORKSPACE DIRECTORY" />
+                <TextBox x:Name="WorkspaceDirectoryBox" Classes="field" PlaceholderText="Recovery workspace directory" />
+                <TextBlock Classes="label" Text="CONFIGURATION FILE" />
+                <TextBox x:Name="ConfigPathBox" Classes="field" IsReadOnly="True" />
+                <TextBlock Classes="caption" Text="The configuration file path is fixed for this dialog and cannot be edited here." TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+    </TabControl>
+
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" Margin="0,18,0,0">
+      <TextBlock x:Name="StatusText" Classes="caption" VerticalAlignment="Center" TextWrapping="Wrap" />
+      <Button x:Name="CancelButton" Grid.Column="1" Classes="secondary" Content="Cancel" MinWidth="90" />
+      <Button x:Name="SaveButton" Grid.Column="2" Classes="primary" Content="Save settings" MinWidth="130" />
+    </Grid>
+  </Grid>
+</Window>

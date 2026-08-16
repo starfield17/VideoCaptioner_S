@@ -14,7 +14,8 @@ public sealed class PipelineRecoveryTests
         var media = new FakeMediaTool();
         var asr = new FakeAsrClient();
         var llm = new FakeLlmClient { FailNextTranslation = true };
-        var pipeline = new PipelineRunner(media, asr, llm, workspace, new SrtSubtitlePublisher());
+        var subtitles = new SrtSubtitlePublisher();
+        var pipeline = new PipelineRunner(media, asr, llm, workspace, subtitles, subtitles);
         var batchRunner = new BatchRunner(pipeline, workspace);
         var output = Path.Combine(temporary.Path, "out", "sample.captioned.zh.bilingual.srt");
         var options = Options("zh-CN");
@@ -84,6 +85,47 @@ public sealed class PipelineRecoveryTests
         Assert.NotNull(await workspace.LoadBatchAsync(second.BatchId, CancellationToken.None));
         Assert.Null(await workspace.LoadJobAsync(first.Jobs[0].JobId, CancellationToken.None));
         Assert.NotNull(await workspace.LoadJobAsync(second.Jobs[0].JobId, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Subtitle_input_skips_media_and_asr_and_exports_corrected_srt()
+    {
+        using var temporary = new TemporaryDirectory();
+        var source = Path.Combine(temporary.Path, "talk.srt");
+        await File.WriteAllTextAsync(source, """
+            1
+            00:00:00,000 --> 00:00:01,000
+            Hello
+
+            2
+            00:00:01,000 --> 00:00:02,000
+            World
+
+            """);
+        var output = Path.Combine(temporary.Path, "out", "talk.captioned.srt");
+        var workspace = new FileJobWorkspace(Path.Combine(temporary.Path, "workspace"));
+        var media = new FakeMediaTool();
+        var asr = new FakeAsrClient();
+        var llm = new FakeLlmClient();
+        var subtitles = new SrtSubtitlePublisher();
+        var pipeline = new PipelineRunner(media, asr, llm, workspace, subtitles, subtitles);
+        var runner = new BatchRunner(pipeline, workspace);
+        var options = Options("zh-CN") with { TargetLanguage = null, Layout = SubtitleLayout.Source, EnableSegmentation = false };
+
+        var batch = await runner.PrepareAsync(
+            [new MediaInput(source, "talk.srt", "srt-sha", output, SourceKind.Subtitle)],
+            CancellationToken.None,
+            options);
+        var result = await runner.RunAsync(batch, options, CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(0, media.ProbeCalls);
+        Assert.Equal(0, media.ChunkCalls);
+        Assert.Equal(0, asr.Calls);
+        Assert.Equal(1, llm.CorrectionCalls);
+        Assert.Equal(0, llm.TranslationCalls);
+        Assert.True(File.Exists(output));
+        Assert.Contains("Hello!", await File.ReadAllTextAsync(output));
     }
 
     private static PipelineOptions Options(string targetLanguage) => new(
@@ -160,8 +202,10 @@ public sealed class PipelineRecoveryTests
             IReadOnlyList<TimedAnchor> anchors,
             EndpointProfile profile,
             string? language,
-            int maxCueCharacters,
+            int maxCueCharactersCjk,
+            int maxCueWordsLatin,
             long maxCueDurationMs,
+            string? referenceText,
             CancellationToken cancellationToken)
         {
             BoundaryCalls++;
@@ -172,6 +216,7 @@ public sealed class PipelineRecoveryTests
             IReadOnlyList<SubtitleCue> cues,
             EndpointProfile profile,
             string? language,
+            string? referenceText,
             CancellationToken cancellationToken)
         {
             CorrectionCalls++;
@@ -183,6 +228,7 @@ public sealed class PipelineRecoveryTests
             IReadOnlyList<SubtitleCue> cues,
             EndpointProfile profile,
             string targetLanguage,
+            string? referenceText,
             CancellationToken cancellationToken)
         {
             TranslationCalls++;

@@ -1,4 +1,3 @@
-using System.Globalization;
 using Captioner.Core;
 
 namespace Captioner.Engine;
@@ -9,6 +8,14 @@ public static class CueSegmenter
         IReadOnlyList<TimedAnchor> anchors,
         IReadOnlyList<string> requestedBoundaryIds,
         int maxCueCharacters,
+        long maxCueDurationMs) =>
+        BuildCues(anchors, requestedBoundaryIds, maxCueCharacters, 0, maxCueDurationMs);
+
+    public static IReadOnlyList<SubtitleCue> BuildCues(
+        IReadOnlyList<TimedAnchor> anchors,
+        IReadOnlyList<string> requestedBoundaryIds,
+        int maxCueCharactersCjk,
+        int maxCueWordsLatin,
         long maxCueDurationMs)
     {
         if (anchors.Count == 0)
@@ -26,7 +33,8 @@ public static class CueSegmenter
             current.Add(anchor);
             var text = JoinText(current);
             var duration = current[^1].EndMs - current[0].StartMs;
-            var mustCut = TextLength(text) >= maxCueCharacters || duration >= maxCueDurationMs;
+            var mustCut = ExceedsLength(text, maxCueCharactersCjk, maxCueWordsLatin) ||
+                duration >= maxCueDurationMs;
             var requestedCut = requested.Contains(anchor.Id);
 
             if ((mustCut || requestedCut) && current.Count > 0)
@@ -60,7 +68,20 @@ public static class CueSegmenter
             TimingOrigin: origin);
     }
 
-    private static int TextLength(string value) => new StringInfo(value).LengthInTextElements;
+    private static bool ExceedsLength(string text, int maxCueCharactersCjk, int maxCueWordsLatin)
+    {
+        if (TextSimilarity.IsMainlyCjk(text))
+        {
+            return TextSimilarity.GraphemeCount(text) >= Math.Max(1, maxCueCharactersCjk);
+        }
+
+        if (maxCueWordsLatin > 0)
+        {
+            return TextSimilarity.LatinWordCount(text) >= maxCueWordsLatin;
+        }
+
+        return TextSimilarity.GraphemeCount(text) >= Math.Max(1, maxCueCharactersCjk);
+    }
 
     private static string JoinText(IReadOnlyList<TimedAnchor> anchors)
     {

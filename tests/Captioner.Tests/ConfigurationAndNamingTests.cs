@@ -79,6 +79,32 @@ public sealed class ConfigurationAndNamingTests
     }
 
     [Fact]
+    public void Workspace_directory_round_trips_and_legacy_configuration_uses_the_default()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "captioner-workspace-config-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(directory, "config.json");
+        var workspace = Path.Combine(directory, "recovery");
+        try
+        {
+            var loader = new JsonConfigurationLoader(path);
+            loader.Save(loader.CreateDefault() with { WorkspaceDirectory = workspace });
+
+            Assert.Equal(Path.GetFullPath(workspace), loader.Load().WorkspaceDirectory);
+            Assert.Contains("workspaceDirectory", File.ReadAllText(path), StringComparison.Ordinal);
+
+            File.WriteAllText(path, "{\"default\":{\"asr\":{},\"llm\":{}}}");
+            Assert.Equal(Path.GetFullPath(FileJobWorkspace.DefaultRootDirectory), loader.Load().WorkspaceDirectory);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void Model_catalog_is_pinned_and_contains_requested_families()
     {
         Assert.Contains(AsrModelCatalog.All, model => model.Id == "qwen3-asr-0.6b-int8");

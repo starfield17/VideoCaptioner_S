@@ -1,0 +1,183 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Captioner.Desktop"
+             x:Class="Captioner.Desktop.NewBatchView"
+             x:DataType="local:NewBatchView">
+  <Grid RowDefinitions="*,Auto" Background="{StaticResource CanvasBrush}">
+    <ScrollViewer Grid.Row="0">
+      <StackPanel Margin="28,24,28,20" Spacing="16" MaxWidth="1180" HorizontalAlignment="Stretch">
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel>
+            <TextBlock Classes="page-title" Text="New batch" />
+            <TextBlock Classes="caption" Margin="0,4,0,0" Text="Create captions from media or improve existing SRT files." />
+          </StackPanel>
+          <Border Grid.Column="1" Classes="subtle-card" Padding="12,8" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Ellipse Width="8" Height="8" Fill="{StaticResource SuccessBrush}" />
+              <TextBlock x:Name="ReadinessText" FontSize="12" FontWeight="SemiBold" Text="Settings loaded" />
+            </StackPanel>
+          </Border>
+        </Grid>
+
+        <Border Classes="card">
+          <StackPanel Spacing="13">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel>
+                <TextBlock Classes="section-title" Text="Source files" />
+                <TextBlock Classes="caption" Margin="0,3,0,0" Text="Add media, SRT files, or folders. Mixed batches are supported." />
+              </StackPanel>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button x:Name="AddFilesButton" Classes="secondary" Content="Add files" Click="AddFiles_Click" />
+                <Button x:Name="AddFolderButton" Classes="secondary" Content="Add folder" Click="AddFolder_Click" />
+              </StackPanel>
+            </Grid>
+
+            <Border x:Name="DropZone"
+                    Classes="subtle-card"
+                    MinHeight="112"
+                    DragDrop.AllowDrop="True"
+                    DragDrop.DragOver="DropZone_DragOver"
+                    DragDrop.Drop="DropZone_Drop">
+              <Grid>
+                <StackPanel x:Name="EmptyInputPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="5">
+                  <TextBlock HorizontalAlignment="Center" FontWeight="SemiBold" Text="Drop media or SRT files here" />
+                  <TextBlock Classes="caption" HorizontalAlignment="Center" Text="MP4, MKV, MP3, WAV, FLAC, SRT, and supported folders" />
+                </StackPanel>
+                <ItemsControl x:Name="InputList" ItemsSource="{Binding Inputs}" IsVisible="False">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="local:InputPathItem">
+                      <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,4">
+                        <StackPanel>
+                          <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
+                          <TextBlock Classes="caption" Text="{Binding Detail}" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <Border Grid.Column="1" Background="{StaticResource SoftBlueBrush}" CornerRadius="12" Padding="9,4" Margin="10,0">
+                          <TextBlock Foreground="{StaticResource PrimaryBrush}" FontSize="11" FontWeight="SemiBold" Text="{Binding Kind}" />
+                        </Border>
+                        <Button Grid.Column="2" Classes="ghost" Content="Remove" Click="RemoveInput_Click" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </Grid>
+            </Border>
+            <TextBlock x:Name="InputStatusText" Classes="caption" Text="No inputs selected." />
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card">
+          <StackPanel Spacing="10">
+            <TextBlock Classes="section-title" Text="Output" />
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+              <TextBox x:Name="OutputPathBox" Classes="field" PlaceholderText="Choose an output folder" />
+              <Button Grid.Column="1" Classes="secondary" Content="Browse" Click="BrowseOutput_Click" />
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card" Padding="0">
+          <TabControl x:Name="OptionsTabs" Classes="workbench" Padding="8" SelectedIndex="0">
+            <TabItem Header="Captions">
+              <StackPanel Margin="12" Spacing="15">
+                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
+                  <StackPanel Grid.Column="0" Spacing="6">
+                    <TextBlock Classes="label" Text="SOURCE LANGUAGE" />
+                    <TextBox x:Name="SourceLanguageBox" Classes="field" PlaceholderText="Auto detect" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Spacing="6">
+                    <TextBlock Classes="label" Text="TRANSLATE TO" />
+                    <TextBox x:Name="TargetLanguageBox" Classes="field" PlaceholderText="For example, zh-CN" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="2" Spacing="6">
+                    <TextBlock Classes="label" Text="OUTPUT LAYOUT" />
+                    <ComboBox x:Name="LayoutBox" Classes="field" SelectedIndex="0">
+                      <ComboBoxItem Content="Source only" />
+                      <ComboBoxItem Content="Translation only" />
+                      <ComboBoxItem Content="Bilingual" />
+                    </ComboBox>
+                  </StackPanel>
+                </Grid>
+
+                <Border Background="#F8FAFD" CornerRadius="8" Padding="13">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel>
+                      <TextBlock FontWeight="SemiBold" Text="Default glossary" />
+                      <TextBlock x:Name="DefaultReferenceText" Classes="caption" Margin="0,3,0,0" Text="No default glossary configured." />
+                    </StackPanel>
+                    <Button Grid.Column="1" Classes="ghost" Content="Edit in Settings" Click="EditReference_Click" />
+                  </Grid>
+                </Border>
+
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="label" Text="BATCH MANUSCRIPT / NOTES" />
+                  <TextBox x:Name="BatchReferenceBox"
+                           Classes="field"
+                           AcceptsReturn="True"
+                           TextWrapping="Wrap"
+                           MinHeight="84"
+                           PlaceholderText="Optional names, terminology, or manuscript used only for this batch" />
+                </StackPanel>
+
+                <WrapPanel ItemSpacing="22" LineSpacing="8">
+                  <CheckBox x:Name="SegmentBox" Content="Improve cue boundaries" IsChecked="True" />
+                  <CheckBox x:Name="CorrectBox" Content="Polish wording" IsChecked="True" />
+                </WrapPanel>
+                <TextBlock x:Name="SegmentationHintText" Classes="caption" Text="Media is segmented semantically. SRT-only batches preserve existing cues by default." />
+              </StackPanel>
+            </TabItem>
+
+            <TabItem Header="Processing">
+              <Grid Margin="12" ColumnDefinitions="*,*" ColumnSpacing="14">
+                <StackPanel Grid.Column="0" Spacing="6">
+                  <TextBlock Classes="label" Text="PARALLEL FILES" />
+                  <NumericUpDown x:Name="JobsBox" Classes="field" Minimum="1" Maximum="16" Value="2" />
+                  <TextBlock Classes="caption" Text="Number of input files processed at the same time." />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="6">
+                  <TextBlock Classes="label" Text="PARALLEL LLM WINDOWS" />
+                  <NumericUpDown x:Name="LlmJobsBox" Classes="field" Minimum="1" Maximum="16" Value="4" />
+                  <TextBlock Classes="caption" Text="Higher values may increase API rate-limit errors." />
+                </StackPanel>
+              </Grid>
+            </TabItem>
+
+            <TabItem Header="Advanced">
+              <StackPanel Margin="12" Spacing="15">
+                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
+                  <StackPanel Grid.Column="0" Spacing="6">
+                    <TextBlock Classes="label" Text="MAX CJK CHARACTERS" />
+                    <NumericUpDown x:Name="MaxCjkBox" Classes="field" Minimum="1" Maximum="200" Value="18" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Spacing="6">
+                    <TextBlock Classes="label" Text="MAX LATIN WORDS" />
+                    <NumericUpDown x:Name="MaxWordsBox" Classes="field" Minimum="1" Maximum="100" Value="12" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="2" Spacing="6">
+                    <TextBlock Classes="label" Text="MAX CUE DURATION (MS)" />
+                    <NumericUpDown x:Name="MaxDurationBox" Classes="field" Minimum="500" Maximum="30000" Increment="500" Value="7000" />
+                  </StackPanel>
+                </Grid>
+                <CheckBox x:Name="OverwriteBox" Content="Replace existing SRT outputs" />
+                <TextBlock Classes="caption" Text="Source media is always opened read-only. Only matching output SRT files may be replaced." />
+              </StackPanel>
+            </TabItem>
+          </TabControl>
+        </Border>
+
+        <Border x:Name="ValidationBanner" Classes="subtle-card" IsVisible="False">
+          <TextBlock x:Name="ValidationText" TextWrapping="Wrap" />
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+
+    <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="28,14">
+      <Grid ColumnDefinitions="*,Auto" MaxWidth="1180" HorizontalAlignment="Stretch">
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock x:Name="DraftSummaryText" FontWeight="SemiBold" Text="Add files to create a batch." />
+          <TextBlock Classes="caption" Text="Settings are checked when the batch starts." />
+        </StackPanel>
+        <Button x:Name="StartBatchButton" Grid.Column="1" Classes="primary" Content="Start batch" Click="StartBatch_Click" IsEnabled="False" />
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

@@ -2,8 +2,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Captioner.Core;
 using Captioner.Desktop;
+using Captioner.Infrastructure;
 using Xunit;
 
 [assembly: AvaloniaTestApplication(typeof(Captioner.Desktop.Tests.TestAppBuilder))]
@@ -27,25 +30,73 @@ public sealed class DesktopStartupTests
             window.Show();
 
             Assert.True(window.IsVisible);
-            var backend = Assert.IsType<ComboBox>(window.FindControl<ComboBox>("AsrBackendBox"));
-            var model = Assert.IsType<ComboBox>(window.FindControl<ComboBox>("AsrModelBox"));
-            var targetLanguage = Assert.IsType<TextBox>(window.FindControl<TextBox>("TargetLanguageBox"));
-            var layout = Assert.IsType<ComboBox>(window.FindControl<ComboBox>("LayoutBox"));
+            var newBatch = Assert.IsType<NewBatchView>(window.FindControl<NewBatchView>("NewBatchPage"));
+            var queue = Assert.IsType<QueueView>(window.FindControl<QueueView>("QueuePage"));
+            var targetLanguage = Assert.IsType<TextBox>(newBatch.FindControl<TextBox>("TargetLanguageBox"));
+            var layout = Assert.IsType<ComboBox>(newBatch.FindControl<ComboBox>("LayoutBox"));
 
-            backend.SelectedIndex = 1;
-            backend.SelectedIndex = 0;
-            model.SelectedItem = "whisper-base";
             targetLanguage.Text = "zh-CN";
             await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
             Assert.Equal(2, layout.SelectedIndex);
             targetLanguage.Text = string.Empty;
             await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
             Assert.Equal(0, layout.SelectedIndex);
+
+            var queueButton = Assert.IsType<Button>(window.FindControl<Button>("QueueNavButton"));
+            queueButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(newBatch.IsVisible);
+            Assert.True(queue.IsVisible);
         }
         finally
         {
             window.Close();
         }
+    }
+
+    [AvaloniaFact]
+    public void Settings_dialog_uses_the_new_english_categories()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "captioner-settings-ui-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var dialog = new SettingsDialog(new JsonConfigurationLoader(Path.Combine(directory, "config.json")));
+            Assert.NotNull(dialog.FindControl<ComboBox>("AsrBackendBox"));
+            Assert.NotNull(dialog.FindControl<TextBox>("LlmBaseUrlBox"));
+            Assert.NotNull(dialog.FindControl<TextBox>("ReferenceBox"));
+            Assert.NotNull(dialog.FindControl<TextBox>("WorkspaceDirectoryBox"));
+            Assert.Equal("Settings", dialog.Title);
+            dialog.Close();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
+    public void Subtitle_job_with_missing_required_stages_is_not_reported_complete()
+    {
+        var row = new JobRow("job", "/tmp/input.srt");
+        var now = DateTimeOffset.UtcNow;
+        row.Apply(new JobManifest(
+            1,
+            "job",
+            "batch",
+            "/tmp/input.srt",
+            "input.srt",
+            "hash",
+            "/tmp/output.srt",
+            new Dictionary<string, StageRecord>(),
+            now,
+            now,
+            SourceKind.Subtitle));
+
+        Assert.Equal("Waiting", row.Status);
+        Assert.Equal("Segment", row.CurrentStage);
+        Assert.Equal("Not needed", row.Stages[0].StateText);
+        Assert.Equal("Not needed", row.Stages[1].StateText);
+        Assert.Equal("Not needed", row.Stages[2].StateText);
     }
 
     [AvaloniaFact]

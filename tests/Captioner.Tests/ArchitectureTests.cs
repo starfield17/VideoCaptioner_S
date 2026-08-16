@@ -14,17 +14,19 @@ public sealed class ArchitectureTests
 
         Assert.DoesNotContain("Captioner.Engine", references);
         Assert.DoesNotContain("Captioner.Infrastructure", references);
-        Assert.DoesNotContain("Captioner.Cli", references);
+        Assert.DoesNotContain("captioner", references);
+        Assert.DoesNotContain("captioner-desktop", references);
     }
 
     [Fact]
-    public void Engine_references_core_but_not_infrastructure_or_cli()
+    public void Engine_references_core_but_not_infrastructure_or_frontends()
     {
         var references = ReferencedAssemblyNames(typeof(BatchRunner).Assembly);
 
         Assert.Contains("Captioner.Core", references);
         Assert.DoesNotContain("Captioner.Infrastructure", references);
-        Assert.DoesNotContain("Captioner.Cli", references);
+        Assert.DoesNotContain("captioner", references);
+        Assert.DoesNotContain("captioner-desktop", references);
     }
 
     [Fact]

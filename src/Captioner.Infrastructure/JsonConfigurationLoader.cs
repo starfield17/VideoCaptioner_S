@@ -8,7 +8,9 @@ public sealed record CaptionerConfiguration(
     EndpointProfile Asr,
     EndpointProfile Llm,
     IReadOnlyDictionary<string, EndpointProfile> Profiles,
-    string ModelDirectory)
+    string ModelDirectory,
+    string? ReferenceText = null,
+    string? WorkspaceDirectory = null)
 {
     public EndpointProfile GetProfile(string name)
     {
@@ -82,7 +84,7 @@ public sealed class JsonConfigurationLoader
             "deepseek-v4-flash",
             "DEEPSEEK_API_KEY",
             LlmCapabilities,
-            MaxConcurrency: 1,
+            MaxConcurrency: 4,
             Backend: EndpointBackend.OpenAiCompatible);
         return new(
             asr,
@@ -105,6 +107,12 @@ public sealed class JsonConfigurationLoader
         var value = new
         {
             modelDirectory = Path.GetFullPath(configuration.ModelDirectory),
+            workspaceDirectory = string.IsNullOrWhiteSpace(configuration.WorkspaceDirectory)
+                ? null
+                : Path.GetFullPath(configuration.WorkspaceDirectory),
+            referenceText = string.IsNullOrWhiteSpace(configuration.ReferenceText)
+                ? null
+                : configuration.ReferenceText,
             @default = new
             {
                 asr = ToFileEndpoint(configuration.Asr),
@@ -163,10 +171,23 @@ public sealed class JsonConfigurationLoader
             var selected = profiles.TryGetValue(profileName, out var endpoint)
                 ? endpoint
                 : throw new KeyNotFoundException($"Endpoint profile '{profileName}' is not configured.");
-            return new(selected, selected, profiles, Path.GetFullPath(modelDirectory));
+            return new(
+                selected,
+                selected,
+                profiles,
+                Path.GetFullPath(modelDirectory),
+                GetString(root, "referenceText"),
+                ResolveWorkspaceDirectory(root));
         }
 
-        return new(defaultAsr, defaultLlm, profiles, Path.GetFullPath(modelDirectory));
+        var referenceText = GetString(root, "referenceText");
+        return new(
+            defaultAsr,
+            defaultLlm,
+            profiles,
+            Path.GetFullPath(modelDirectory),
+            referenceText,
+            ResolveWorkspaceDirectory(root));
     }
 
     public CaptionerConfiguration LoadWithEnvironment(string? profileName = null)
@@ -188,7 +209,9 @@ public sealed class JsonConfigurationLoader
             Profiles = profiles,
             ModelDirectory = string.IsNullOrWhiteSpace(modelDirectory)
                 ? configuration.ModelDirectory
-                : Path.GetFullPath(modelDirectory)
+                : Path.GetFullPath(modelDirectory),
+            ReferenceText = configuration.ReferenceText,
+            WorkspaceDirectory = configuration.WorkspaceDirectory
         };
     }
 
@@ -198,6 +221,8 @@ public sealed class JsonConfigurationLoader
         return new
         {
             configuration.ModelDirectory,
+            configuration.WorkspaceDirectory,
+            configuration.ReferenceText,
             Asr = ToRedactedEndpoint(configuration.Asr),
             Llm = ToRedactedEndpoint(configuration.Llm),
             Profiles = configuration.Profiles
@@ -206,6 +231,9 @@ public sealed class JsonConfigurationLoader
                 .ToDictionary(pair => pair.Key, pair => ToRedactedEndpoint(pair.Value), StringComparer.OrdinalIgnoreCase)
         };
     }
+
+    private static string ResolveWorkspaceDirectory(JsonElement root) =>
+        Path.GetFullPath(GetString(root, "workspaceDirectory") ?? FileJobWorkspace.DefaultRootDirectory);
 
     private static EndpointProfile ApplyEnvironment(EndpointProfile profile, string name)
     {
